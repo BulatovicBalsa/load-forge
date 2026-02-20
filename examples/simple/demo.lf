@@ -1,0 +1,8 @@
+test "Hello DSL" {
+  environment {
+    baseUrl = env("BASE_URL")
+    token   = env("TOKEN")
+  }
+
+  target baseUrl
+}

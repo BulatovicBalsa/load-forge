@@ -1,0 +1,19 @@
+[project]
+name = "loadforge"
+version = "0.1.0"
+description = "Load testing DSL framework"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "python-dotenv>=1.2.1",
+    "textx>=4.3.0",
+]
+
+[project.scripts]
+loadforge = "loadforge.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+package = true

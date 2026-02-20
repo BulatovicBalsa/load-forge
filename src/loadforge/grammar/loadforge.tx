@@ -1,0 +1,22 @@
+TestFile:
+    test=Test
+;
+
+Test:
+    'test' name=STRING '{'
+        ('environment' '{' envVars*=EnvVar '}')?
+        ('target' target=Value)?
+    '}'
+;
+
+EnvVar:
+    name=ID '=' value=EnvCall
+;
+
+EnvCall:
+    'env' '(' key=STRING ')'
+;
+
+Value:
+    STRING | ID
+;
