@@ -4,8 +4,18 @@ TestFile:
 
 Test:
     'test' name=STRING '{'
-        ('environment' '{' envVars*=EnvVar '}')?
-        ('target' target=Value)?
+        (environment=Environment)?
+        ('target' target=Target)?
+    '}'
+;
+
+Target:
+    ref=Ref | value=STRING
+;
+
+Environment:
+    'environment' '{'
+        envVars*=EnvVar
     '}'
 ;
 
@@ -17,6 +27,6 @@ EnvCall:
     'env' '(' key=STRING ')'
 ;
 
-Value:
-    STRING | ID
+Ref:
+    name=ID
 ;
