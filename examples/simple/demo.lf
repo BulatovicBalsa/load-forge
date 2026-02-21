@@ -5,4 +5,10 @@ test "Hello DSL" {
   }
 
   target baseUrl
+
+  load {
+    users 10
+    rampUp 10s
+    duration 1m
+  }
 }

@@ -6,7 +6,22 @@ Test:
     'test' name=STRING '{'
         (environment=Environment)?
         ('target' target=Target)?
+        (load=Load)?
     '}'
+;
+
+Load:
+    'load' '{'
+        'users' users=INT
+        'rampUp' ramp_up=Duration
+        'duration' duration=Duration
+    '}'
+;
+
+Duration:
+    (hours=INT 'h')?
+    (minutes=INT 'm')?
+    (seconds=INT 's')?
 ;
 
 Target:

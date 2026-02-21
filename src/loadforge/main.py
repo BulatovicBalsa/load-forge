@@ -8,7 +8,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from textx import metamodel_from_file
 
-from .model import EnvVar, Ref, TestFile, Test, Environment, EnvCall, Target
+from .model import EnvVar, Ref, TestFile, Test, Environment, EnvCall, Target, Load, Duration
 
 HERE = Path(__file__).resolve().parent
 GRAMMAR_PATH = HERE / "grammar" / "loadforge.tx"
@@ -71,7 +71,7 @@ def parse_args() -> Path:
 def build_metamodel():
     return metamodel_from_file(
         str(GRAMMAR_PATH),
-        classes=[TestFile, Test, Environment, EnvVar, EnvCall, Ref],
+        classes=[TestFile, Test, Environment, EnvVar, EnvCall, Ref, Target, Load, Duration],
     )
 
 
@@ -89,6 +89,9 @@ def main() -> None:
     print(f"Parsed test: {model.test.name}")
     if target_url is not None:
         print(f"Target: {target_url}")
+
+    if model.test.load is not None:
+        print(f"Load: {model.test.load}")
 
 
 if __name__ == "__main__":
