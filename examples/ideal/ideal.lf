@@ -2,11 +2,22 @@ test "Catalog search - steady load" {
 
   environment {
     baseUrl = env("BASE_URL")
-    token   = env("API_TOKEN")
+    authEndpoint = env("AUTH_ENDPOINT")
+    username = env("USERNAME")
+    password = env("PASSWORD")
   }
 
-  target baseUrl
-  auth bearer token
+  target #baseUrl
+
+  auth login {
+    endpoint #authEndpoint
+    method POST
+    body {
+      username = #username
+      password = #password
+    }
+    format "$.access_token"
+  }
 
   variables {
     q = "phone"
@@ -15,6 +26,7 @@ test "Catalog search - steady load" {
   scenario "search" {
     request GET "/catalog/search?q=${q}"
     expect status 200
+    expect json "$.results" isArray // (could be notEmpty, isArray, hasSize, etc.)
   }
 
   load {
