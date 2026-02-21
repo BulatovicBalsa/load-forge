@@ -1,0 +1,30 @@
+test "Catalog search - steady load" {
+
+  environment {
+    baseUrl = env("BASE_URL")
+    token   = env("API_TOKEN")
+  }
+
+  target baseUrl
+  auth bearer token
+
+  variables {
+    q = "phone"
+  }
+
+  scenario "search" {
+    request GET "/catalog/search?q=${q}"
+    expect status 200
+  }
+
+  load {
+    users 50
+    rampUp 30s
+    duration 5m
+  }
+
+  metrics {
+    p95 < 250ms
+    errorRate < 1%
+  }
+}
