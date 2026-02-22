@@ -19,3 +19,9 @@ loadforge ./path-to-lf-file
 - `parameters`: `./demo.lf`
 
 ![img.png](img/img.png)
+
+# testing
+
+```cmd
+uv run pytest -v
+```
