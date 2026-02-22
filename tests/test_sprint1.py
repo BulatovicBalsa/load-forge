@@ -10,8 +10,7 @@ from loadforge.model import (
     VariablesBlock, VarEntry, Scenario, Request, ExpectStatus,
     Test, TestFile,
 )
-from loadforge.main import resolve_env, variables_map, resolve_target
-
+from loadforge.main import resolve_env, resolve_target, build_context, resolve_variables
 
 DSL = r'''
 test "Hello DSL" {
@@ -56,8 +55,9 @@ def test_scenario_executes_and_expects_status(monkeypatch: pytest.MonkeyPatch):
     assert model.test is not None
 
     env_map = resolve_env(model.test.environment)
-    vars_map = variables_map(model.test.variables)
-    base = resolve_target(model.test.target, env_map, vars_map)
+    vars_map = resolve_variables(model.test.variables, env_map)
+    ctx = build_context(env_map, vars_map)
+    base = resolve_target(model.test.target, ctx)
     assert base == "https://api.example.com"
 
     # Mock HTTP

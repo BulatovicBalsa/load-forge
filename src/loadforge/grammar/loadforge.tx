@@ -19,7 +19,11 @@ VariablesBlock:
 ;
 
 VarEntry:
-    name=ID '=' value=STRING
+    name=ID '=' value=ValueOrRef
+;
+
+ValueOrRef:
+    ref=Ref | value=STRING
 ;
 
 Scenario:

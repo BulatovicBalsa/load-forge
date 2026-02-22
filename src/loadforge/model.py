@@ -52,9 +52,15 @@ class Load(TxNode):
 
 
 @dataclass
+class ValueOrRef(TxNode):
+    ref: Optional[Ref] = None
+    value: str = ""
+
+
+@dataclass
 class VarEntry(TxNode):
     name: str = ""
-    value: str = ""  # STRING literal
+    value: Optional[ValueOrRef] = None
 
 
 @dataclass
