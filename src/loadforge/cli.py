@@ -1,3 +1,6 @@
+# src/loadforge/cli.py
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -26,9 +29,9 @@ def parse_args() -> Path:
 
 def main() -> None:
     load_env_from_cwd()
-    dsl_path = parse_args()
-    model = parse_file(dsl_path)
-    run_test(model)
+    model = parse_file(parse_args())
+    result = run_test(model)
+    print(result)
 
 
 if __name__ == "__main__":

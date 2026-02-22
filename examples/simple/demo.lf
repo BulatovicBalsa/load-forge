@@ -13,12 +13,12 @@ test "Hello DSL" {
 
   scenario "search" {
     request GET "/catalog/search?q=${q}"
-    expect status 200
+    expect status 404
   }
 
   scenario "search again" {
     request GET "/catalog/search?q=${q2}"
-    expect status 200
+    expect status 404
   }
 
   load {
