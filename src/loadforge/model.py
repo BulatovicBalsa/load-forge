@@ -52,11 +52,42 @@ class Load(TxNode):
 
 
 @dataclass
+class VarEntry(TxNode):
+    name: str = ""
+    value: str = ""  # STRING literal
+
+
+@dataclass
+class VariablesBlock(TxNode):
+    vars: list[VarEntry] = field(default_factory=list)
+
+
+@dataclass
+class Request(TxNode):
+    method: str = ""  # GET/POST...
+    path: str = ""    # STRING literal
+
+
+@dataclass
+class ExpectStatus(TxNode):
+    code: int = 0
+
+
+@dataclass
+class Scenario(TxNode):
+    name: str = ""
+    steps: list[TxNode] = field(default_factory=list)  # Request | ExpectStatus
+
+
+
+@dataclass
 class Test(TxNode):
     name: str = ""
     environment: Optional[Environment] = None
     target: Optional[Target] = None
     load: Optional[Load] = None
+    variables: Optional[VariablesBlock] = None
+    scenarios: list[Scenario] = field(default_factory=list)
 
 
 @dataclass

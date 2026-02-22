@@ -6,6 +6,21 @@ test "Hello DSL" {
 
   target #baseUrl
 
+  variables {
+    q = "phone"
+    q2 = "laptop"
+  }
+
+  scenario "search" {
+    request GET "/catalog/search?q=${q}"
+    expect status 200
+  }
+
+  scenario "search again" {
+    request GET "/catalog/search?q=${q2}"
+    expect status 200
+  }
+
   load {
     users 10
     rampUp 10s

@@ -55,7 +55,7 @@ def test_target_ref_resolves(monkeypatch: pytest.MonkeyPatch):
 
     assert env_map["baseUrl"] == "https://api.example.com"
 
-    target_url = resolve_target(model.test.target, env_map)
+    target_url = resolve_target(model.test.target, env_map, {})
     assert target_url == "https://api.example.com"
 
 

@@ -6,26 +6,50 @@ Test:
     'test' name=STRING '{'
         (environment=Environment)?
         ('target' target=Target)?
+        (variables=VariablesBlock)?
+        scenarios*=Scenario
         (load=Load)?
     '}'
 ;
 
-Load:
-    'load' '{'
-        'users' users=INT
-        'rampUp' ramp_up=Duration
-        'duration' duration=Duration
+VariablesBlock:
+    'variables' '{'
+        vars*=VarEntry
     '}'
 ;
 
-Duration:
-    (hours=INT 'h')?
-    (minutes=INT 'm')?
-    (seconds=INT 's')?
+VarEntry:
+    name=ID '=' value=STRING
+;
+
+Scenario:
+    'scenario' name=STRING '{'
+        steps*=ScenarioStep
+    '}'
+;
+
+ScenarioStep:
+    Request | ExpectStatus
+;
+
+Request:
+    'request' method=HttpMethod path=STRING
+;
+
+ExpectStatus:
+    'expect' 'status' code=INT
+;
+
+HttpMethod:
+    'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 ;
 
 Target:
     ref=Ref | value=STRING
+;
+
+Ref:
+    '#' name=ID
 ;
 
 Environment:
@@ -42,6 +66,16 @@ EnvCall:
     'env' '(' key=STRING ')'
 ;
 
-Ref:
-    '#' name=ID
+Load:
+    'load' '{'
+        'users' users=INT
+        'rampUp' ramp_up=Duration
+        'duration' duration=Duration
+    '}'
+;
+
+Duration:
+    (hours=INT 'h')?
+    (minutes=INT 'm')?
+    (seconds=INT 's')?
 ;
