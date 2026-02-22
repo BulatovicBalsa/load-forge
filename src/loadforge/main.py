@@ -37,7 +37,29 @@ def resolve_env(environment: Optional[Environment]) -> dict[str, str]:
     return resolved
 
 
-def resolve_target(target: Target, env_map: dict[str, str]) -> Optional[str]:
+def resolve_ref(name: str, env_map: dict[str, str]) -> str:
+    if name not in env_map:
+        raise RuntimeError(f"Reference '#{name}' not found.")
+    return env_map[name]
+
+
+def resolve_value(value, env_map: dict[str, str]):
+    """
+    Resolves ValueOrRef-like values.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, Ref):
+        return resolve_ref(value.name, env_map)
+
+    if isinstance(value, str):
+        return value.strip()
+
+    return value
+
+
+def resolve_target(target: Optional[Target], env_map: dict[str, str]) -> Optional[str]:
     """
     Resolves `target` to an actual URL string if possible.
     - If target is STRING -> returns it
@@ -47,10 +69,10 @@ def resolve_target(target: Target, env_map: dict[str, str]) -> Optional[str]:
         return None
 
     if target.value:
-        return target.value.strip()
+        return resolve_value(target.value, env_map)
 
     if target.ref is not None:
-        return env_map.get(target.ref.name)
+        return resolve_value(target.ref, env_map)
 
     return None
 
