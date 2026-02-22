@@ -10,7 +10,7 @@ from loadforge.model import (
     VariablesBlock, VarEntry, Scenario, Request, ExpectStatus,
     Test, TestFile,
 )
-from loadforge.main import resolve_env, resolve_target, build_context, resolve_variables
+from loadforge.runtime.context import resolve_target, build_context, resolve_env, resolve_variables
 
 DSL = r'''
 test "Hello DSL" {

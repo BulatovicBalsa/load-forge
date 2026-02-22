@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-loadforge = "loadforge.main:main"
+loadforge = "loadforge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

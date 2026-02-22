@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 from textx import metamodel_from_file
 
-from loadforge.main import resolve_env, resolve_target, resolve_variables, build_context
 from loadforge.model import (
     EnvCall,
     EnvVar,
@@ -18,6 +17,9 @@ from loadforge.model import (
 
 Test.__test__ = False
 TestFile.__test__ = False
+
+from loadforge.runtime.context import build_context, resolve_env, resolve_target, resolve_variables
+
 
 def build_mm() :
     grammar_path = Path(__file__).resolve().parents[1] / "src" / "loadforge" / "grammar" / "loadforge.tx"
