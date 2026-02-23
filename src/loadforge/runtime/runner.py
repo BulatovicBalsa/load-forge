@@ -25,6 +25,15 @@ class Color:
 
 
 @dataclass
+class AuthResult:
+    endpoint: str
+    method: str
+    duration_seconds: float
+    success: bool
+    error: Optional[str] = None
+
+
+@dataclass
 class ScenarioResult:
     name: str
     requests: int = 0
@@ -37,18 +46,38 @@ class RunResult:
     test_name: str
     duration_seconds: float
     scenarios: list[ScenarioResult] = field(default_factory=list)
+    auth: Optional[AuthResult] = None
 
     @property
     def total_requests(self) -> int:
-        return sum(s.requests for s in self.scenarios)
+        total = sum(s.requests for s in self.scenarios)
+        if self.auth:
+            total += 1
+        return total
 
     @property
     def failed(self) -> int:
+        failures = sum(1 for s in self.scenarios if not s.success)
+        if self.auth and not self.auth.success:
+            failures += 1
+        return failures
+
+    @property
+    def scenario_passed(self) -> int:
+        return sum(1 for s in self.scenarios if s.success)
+
+    @property
+    def scenario_failed(self) -> int:
         return sum(1 for s in self.scenarios if not s.success)
 
     @property
-    def passed(self) -> int:
-        return sum(1 for s in self.scenarios if s.success)
+    def total_steps(self) -> int:
+        # auth + scenarios
+        return len(self.scenarios) + (1 if self.auth else 0)
+
+    @property
+    def steps_passed(self) -> int:
+        return self.total_steps - self.failed
 
     def __str__(self) -> str:
         lines = []
@@ -60,6 +89,21 @@ class RunResult:
         )
 
         lines.append(header)
+
+        if self.auth:
+            status = (
+                f"{Color.GREEN}✔ PASS{Color.RESET}"
+                if self.auth.success
+                else f"{Color.RED}✘ FAIL{Color.RESET}"
+            )
+            lines.append(
+                f"{Color.BOLD}Auth:{Color.RESET}\n"
+                f"  {status}  {self.auth.method} {self.auth.endpoint} "
+                f"({self.auth.duration_seconds:.3f}s)"
+            )
+            if self.auth.error:
+                lines.append(f"      {Color.YELLOW}{self.auth.error}{Color.RESET}")
+            lines.append("")  # prazan red pre scenarija
 
         for s in self.scenarios:
             status = (
@@ -78,9 +122,19 @@ class RunResult:
 
         summary = (
             f"\n{Color.BOLD}Summary:{Color.RESET}\n"
-            f"  Scenarios: {len(self.scenarios)}\n"
-            f"  Passed: {Color.GREEN}{self.passed}{Color.RESET}\n"
-            f"  Failed: {Color.RED}{self.failed}{Color.RESET}\n"
+            f"  Scenarios: {len(self.scenarios)} "
+            f"({Color.GREEN}{self.scenario_passed} passed{Color.RESET}, "
+            f"{Color.RED}{self.scenario_failed} failed{Color.RESET})\n"
+        )
+
+        if self.auth:
+            auth_status = f"{Color.GREEN}PASS{Color.RESET}" if self.auth.success else f"{Color.RED}FAIL{Color.RESET}"
+            summary += f"  Auth: {auth_status}\n"
+
+        summary += (
+            f"  Total steps: {self.total_steps} "
+            f"({Color.GREEN}{self.steps_passed} passed{Color.RESET}, "
+            f"{Color.RED}{self.failed} failed{Color.RESET})\n"
             f"  Total requests: {self.total_requests}\n"
         )
 
@@ -111,16 +165,50 @@ def run_test(
         raise RuntimeError("Missing target.")
 
     scenario_results: list[ScenarioResult] = []
+    auth_result: Optional[AuthResult] = None
 
     with httpx.Client(base_url=base_url, transport=transport) as client:
         if t.auth is not None:
-            token = run_auth_login(client, t.auth, ctx)
+            auth_start = time.perf_counter()
+            try:
+                token = run_auth_login(client, t.auth, ctx)
 
-            if "authToken" in ctx:
-                raise RuntimeError("Reserved name conflict: 'authToken' is already defined in env/variables.")
-            ctx["authToken"] = token
+                if "authToken" in ctx:
+                    raise RuntimeError("Reserved name conflict: 'authToken' already defined.")
+                ctx["authToken"] = token
 
-            client.headers["Authorization"] = f"Bearer {token}"
+                client.headers["Authorization"] = f"Bearer {token}"
+
+                auth_success = True
+                auth_error = None
+            except Exception as e:
+                auth_success = False
+                auth_error = str(e)
+
+            auth_duration = time.perf_counter() - auth_start
+
+            endpoint_str = (
+                t.auth.endpoint.value.strip('"')
+                if t.auth.endpoint.value
+                else f"#{t.auth.endpoint.ref.name}"
+            )
+
+            auth_result = AuthResult(
+                endpoint=endpoint_str,
+                method=t.auth.method,
+                duration_seconds=auth_duration,
+                success=auth_success,
+                error=auth_error,
+            )
+
+            if not auth_success:
+                duration = time.perf_counter() - start
+                return RunResult(
+                    test_name=t.name.strip('"'),
+                    duration_seconds=duration,
+                    scenarios=[],
+                    auth=auth_result,
+                )
 
         for sc in t.scenarios:
             result = ScenarioResult(name=sc.name)
@@ -141,4 +229,5 @@ def run_test(
         test_name=t.name.strip('"'),
         duration_seconds=duration,
         scenarios=scenario_results,
+        auth=auth_result,
     )
