@@ -100,7 +100,7 @@ class RunResult:
         ]
         if self.auth.error:
             lines.append(f"      {Color.YELLOW}{self.auth.error}{Color.RESET}")
-        lines.append("")  # prazan red
+        lines.append("")
         return lines
 
     def _render_scenarios(self) -> list[str]:
