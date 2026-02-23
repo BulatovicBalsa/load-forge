@@ -79,67 +79,63 @@ class RunResult:
     def steps_passed(self) -> int:
         return self.total_steps - self.failed
 
-    def __str__(self) -> str:
-        lines = []
+    @staticmethod
+    def _fmt_status(ok: bool) -> str:
+        return f"{Color.GREEN}✔ PASS{Color.RESET}" if ok else f"{Color.RED}✘ FAIL{Color.RESET}"
 
-        header = (
+    def _render_header(self) -> str:
+        return (
             f"{Color.BOLD}{Color.CYAN}LoadForge Test Report{Color.RESET}\n"
             f"Test: {Color.BOLD}{self.test_name}{Color.RESET}\n"
             f"Duration: {self.duration_seconds:.3f}s\n"
         )
 
-        lines.append(header)
+    def _render_auth(self) -> list[str]:
+        if not self.auth:
+            return []
+        lines = [
+            f"{Color.BOLD}Auth:{Color.RESET}\n"
+            f"  {self._fmt_status(self.auth.success)}  {self.auth.method} {self.auth.endpoint} "
+            f"({self.auth.duration_seconds:.3f}s)"
+        ]
+        if self.auth.error:
+            lines.append(f"      {Color.YELLOW}{self.auth.error}{Color.RESET}")
+        lines.append("")  # prazan red
+        return lines
 
-        if self.auth:
-            status = (
-                f"{Color.GREEN}✔ PASS{Color.RESET}"
-                if self.auth.success
-                else f"{Color.RED}✘ FAIL{Color.RESET}"
-            )
-            lines.append(
-                f"{Color.BOLD}Auth:{Color.RESET}\n"
-                f"  {status}  {self.auth.method} {self.auth.endpoint} "
-                f"({self.auth.duration_seconds:.3f}s)"
-            )
-            if self.auth.error:
-                lines.append(f"      {Color.YELLOW}{self.auth.error}{Color.RESET}")
-            lines.append("")  # prazan red pre scenarija
-
+    def _render_scenarios(self) -> list[str]:
+        lines: list[str] = []
         for s in self.scenarios:
-            status = (
-                f"{Color.GREEN}✔ PASS{Color.RESET}"
-                if s.success
-                else f"{Color.RED}✘ FAIL{Color.RESET}"
-            )
-            lines.append(
-                f"  {status}  {s.name}  "
-                f"(requests: {s.requests})"
-            )
+            lines.append(f"  {self._fmt_status(s.success)}  {s.name}  (requests: {s.requests})")
             if s.error:
                 lines.append(f"      {Color.YELLOW}{s.error}{Color.RESET}")
+        return lines
 
-        summary_color = Color.GREEN if self.failed == 0 else Color.RED
-
+    def _render_summary(self) -> str:
         summary = (
             f"\n{Color.BOLD}Summary:{Color.RESET}\n"
             f"  Scenarios: {len(self.scenarios)} "
             f"({Color.GREEN}{self.scenario_passed} passed{Color.RESET}, "
             f"{Color.RED}{self.scenario_failed} failed{Color.RESET})\n"
         )
-
         if self.auth:
             auth_status = f"{Color.GREEN}PASS{Color.RESET}" if self.auth.success else f"{Color.RED}FAIL{Color.RESET}"
             summary += f"  Auth: {auth_status}\n"
-
         summary += (
             f"  Total steps: {self.total_steps} "
             f"({Color.GREEN}{self.steps_passed} passed{Color.RESET}, "
             f"{Color.RED}{self.failed} failed{Color.RESET})\n"
             f"  Total requests: {self.total_requests}\n"
         )
+        return summary
 
-        lines.append(summary_color + summary + Color.RESET)
+    def __str__(self) -> str:
+        lines: list[str] = [self._render_header()]
+        lines += self._render_auth()
+        lines += self._render_scenarios()
 
+        summary_color = Color.GREEN if self.failed == 0 else Color.RED
+        lines.append(summary_color + self._render_summary() + Color.RESET)
         return "\n".join(lines)
 
 
