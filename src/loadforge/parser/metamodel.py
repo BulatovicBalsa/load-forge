@@ -2,13 +2,14 @@ from pathlib import Path
 from textx import metamodel_from_file
 from loadforge.model import ExpectStatus, Scenario, ValueOrRef, VarEntry, VariablesBlock, Target, Ref, EnvCall, EnvVar, \
     Test, TestFile, Environment, Load, Request, Duration, AuthLogin, BodyBlock, BodyField, ExpectJson, JsonCheck
+from loadforge.parser.preprocessors import convert_json_check_kind_to_enum
 
 HERE = Path(__file__).resolve().parent.parent
 GRAMMAR_PATH = HERE / "grammar" / "loadforge.tx"
 
 
 def build_metamodel():
-    return metamodel_from_file(
+    mm = metamodel_from_file(
         str(GRAMMAR_PATH),
         classes=[TestFile, Test,
             Environment, EnvVar, EnvCall,
@@ -19,3 +20,6 @@ def build_metamodel():
             AuthLogin, BodyBlock, BodyField,
         ],
     )
+    mm.register_model_processor(convert_json_check_kind_to_enum)
+
+    return mm

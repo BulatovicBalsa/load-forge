@@ -1,7 +1,15 @@
 from dataclasses import field, dataclass
+from enum import Enum
 from typing import Optional, Any
 
 from loadforge.model.base import TxNode
+
+
+class JsonCheckKind(Enum):
+    isArray = "isArray"
+    notEmpty = "notEmpty"
+    equals = "equals"
+    hasSize = "hasSize"
 
 
 @dataclass
@@ -23,7 +31,7 @@ class ExpectJson(TxNode):
 
 @dataclass
 class JsonCheck(TxNode):
-    kind: str = ""          # isArray, notEmpty, equals, hasSize
+    kind: JsonCheckKind = None
     value: Optional[Any] = None
     size: Optional[int] = None
 
