@@ -6,10 +6,30 @@ Test:
     'test' name=STRING '{'
         (environment=Environment)?
         ('target' target=Target)?
+        (auth=AuthLogin)?
         (variables=VariablesBlock)?
         scenarios*=Scenario
         (load=Load)?
     '}'
+;
+
+AuthLogin:
+    'auth' 'login' '{'
+        'endpoint' endpoint=ValueOrRef
+        'method' method=HttpMethod
+        'body' body=BodyBlock
+        'format' format=STRING
+    '}'
+;
+
+BodyBlock:
+    '{'
+        fields*=BodyField
+    '}'
+;
+
+BodyField:
+    name=ID '=' value=ValueOrRef
 ;
 
 VariablesBlock:

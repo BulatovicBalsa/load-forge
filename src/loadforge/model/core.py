@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+from loadforge.model.auth import AuthLogin
 from loadforge.model.base import TxNode
 from loadforge.model.load import Load
 from loadforge.model.scenario import Scenario
@@ -37,6 +38,7 @@ class Test(TxNode):
     load: Optional[Load] = None
     variables: Optional[VariablesBlock] = None
     scenarios: list[Scenario] = field(default_factory=list)
+    auth: Optional[AuthLogin] = None
 
 
 @dataclass

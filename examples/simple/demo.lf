@@ -6,6 +6,16 @@ test "Hello DSL" {
 
   target #baseUrl
 
+  auth login {
+    endpoint "/auth/login"
+    method POST
+    body {
+      username = "admin"
+      password = "admin"
+    }
+    format "$.access_token"
+  }
+
   variables {
     q = "phone"
     q2 = "laptop"
@@ -13,12 +23,12 @@ test "Hello DSL" {
 
   scenario "search" {
     request GET "/catalog/search?q=${q}"
-    expect status 404
+    expect status 200
   }
 
   scenario "search again" {
     request GET "/catalog/search?q=${q2}"
-    expect status 404
+    expect status 200
   }
 
   load {

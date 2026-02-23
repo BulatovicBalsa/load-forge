@@ -4,6 +4,7 @@ from typing import Optional
 
 import httpx
 
+from .auth import run_auth_login
 from ..model import TestFile
 from .context import (
     resolve_env,
@@ -112,6 +113,15 @@ def run_test(
     scenario_results: list[ScenarioResult] = []
 
     with httpx.Client(base_url=base_url, transport=transport) as client:
+        if t.auth is not None:
+            token = run_auth_login(client, t.auth, ctx)
+
+            if "authToken" in ctx:
+                raise RuntimeError("Reserved name conflict: 'authToken' is already defined in env/variables.")
+            ctx["authToken"] = token
+
+            client.headers["Authorization"] = f"Bearer {token}"
+
         for sc in t.scenarios:
             result = ScenarioResult(name=sc.name)
 
