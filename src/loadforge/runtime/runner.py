@@ -1,4 +1,3 @@
-import time
 from typing import Optional
 
 import httpx
@@ -12,6 +11,7 @@ from .context import (
 )
 from .executor import run_scenario
 from .run_result import RunResult, ScenarioResult, AuthResult
+from .timing import timed
 from ..model import TestFile
 
 
@@ -33,30 +33,18 @@ def _build_runtime_context(t) -> tuple[str, dict[str, str]]:
     return base_url, ctx
 
 
-def _run_auth_if_present(
-    client: httpx.Client,
-    t,
-    ctx: dict[str, str],
-) -> Optional[AuthResult]:
+def _run_auth_if_present(client, t, ctx) -> Optional[AuthResult]:
     if t.auth is None:
         return None
 
-    auth_start = time.perf_counter()
     try:
-        token = run_auth_login(client, t.auth, ctx)
-
-        if "authToken" in ctx:
-            raise RuntimeError("Reserved name conflict: 'authToken' already defined.")
-        ctx["authToken"] = token
-
-        client.headers["Authorization"] = f"Bearer {token}"
+        _, duration = _run_auth_timed(client, t, ctx)
         success = True
         error = None
     except Exception as e:
+        duration = 0.0
         success = False
         error = str(e)
-
-    duration = time.perf_counter() - auth_start
 
     endpoint_str = "<missing-endpoint>"
     if t.auth.endpoint is not None:
@@ -72,6 +60,23 @@ def _run_auth_if_present(
         success=success,
         error=error,
     )
+
+
+def _execute_auth(client, t, ctx):
+    token = run_auth_login(client, t.auth, ctx)
+
+    if "authToken" in ctx:
+        raise RuntimeError("Reserved name conflict: 'authToken' already defined.")
+
+    ctx["authToken"] = token
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    return token
+
+
+@timed
+def _run_auth_timed(client, t, ctx):
+    return _execute_auth(client, t, ctx)
 
 
 def _run_scenarios(
@@ -97,34 +102,36 @@ def _run_scenarios(
     return results
 
 
-def run_test(
-    model: TestFile,
-    *,
-    transport: Optional[httpx.BaseTransport] = None,
-) -> RunResult:
-
+def _run_test_internal(model: TestFile, transport=None) -> RunResult:
     t = _get_test(model)
-    start = time.perf_counter()
-
     base_url, ctx = _build_runtime_context(t)
 
     with httpx.Client(base_url=base_url, transport=transport) as client:
         auth_result = _run_auth_if_present(client, t, ctx)
         if auth_result and not auth_result.success:
-            duration = time.perf_counter() - start
             return RunResult(
                 test_name=t.name.strip().strip('"'),
-                duration_seconds=duration,
+                duration_seconds=0.0,
                 scenarios=[],
                 auth=auth_result,
             )
 
-        scenario_results = _run_scenarios(client, t, ctx)
+        scenarios = _run_scenarios(client, t, ctx)
 
-    duration = time.perf_counter() - start
     return RunResult(
         test_name=t.name.strip().strip('"'),
-        duration_seconds=duration,
-        scenarios=scenario_results,
+        duration_seconds=0.0,
+        scenarios=scenarios,
         auth=auth_result,
     )
+
+
+@timed
+def _run_test_timed(model: TestFile, transport=None):
+    return _run_test_internal(model, transport)
+
+
+def run_test(model: TestFile, *, transport=None) -> RunResult:
+    result, duration = _run_test_timed(model, transport)
+    result.duration_seconds = duration
+    return result

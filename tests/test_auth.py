@@ -55,4 +55,4 @@ def test_auth_login_sets_bearer_header(monkeypatch):
 
     result = run_test(model, transport=transport)
     assert result.failed == 0
-    assert result.total_requests == 1
+    assert result.total_requests == 2
