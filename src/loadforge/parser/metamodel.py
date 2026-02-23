@@ -1,7 +1,7 @@
 from pathlib import Path
 from textx import metamodel_from_file
 from loadforge.model import ExpectStatus, Scenario, ValueOrRef, VarEntry, VariablesBlock, Target, Ref, EnvCall, EnvVar, \
-    Test, TestFile, Environment, Load, Request, Duration, AuthLogin, BodyBlock, BodyField
+    Test, TestFile, Environment, Load, Request, Duration, AuthLogin, BodyBlock, BodyField, ExpectJson, JsonCheck
 
 HERE = Path(__file__).resolve().parent.parent
 GRAMMAR_PATH = HERE / "grammar" / "loadforge.tx"
@@ -14,7 +14,7 @@ def build_metamodel():
             Environment, EnvVar, EnvCall,
             Ref, Target,
             VariablesBlock, VarEntry, ValueOrRef,
-            Scenario, Request, ExpectStatus,
+            Scenario, Request, ExpectStatus, ExpectJson, JsonCheck,
             Load, Duration,
             AuthLogin, BodyBlock, BodyField,
         ],

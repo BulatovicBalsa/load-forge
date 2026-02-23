@@ -53,7 +53,7 @@ Scenario:
 ;
 
 ScenarioStep:
-    Request | ExpectStatus
+    Request | ExpectStatus | ExpectJson
 ;
 
 Request:
@@ -62,6 +62,17 @@ Request:
 
 ExpectStatus:
     'expect' 'status' code=INT
+;
+
+ExpectJson:
+    'expect' 'json' path=STRING check=JsonCheck
+;
+
+JsonCheck:
+      kind='isArray'
+    | kind='notEmpty'
+    | kind='equals' value=ValueOrRef
+    | kind='hasSize' size=INT
 ;
 
 HttpMethod:
