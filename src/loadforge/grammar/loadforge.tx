@@ -6,26 +6,85 @@ Test:
     'test' name=STRING '{'
         (environment=Environment)?
         ('target' target=Target)?
+        (auth=AuthLogin)?
+        (variables=VariablesBlock)?
+        scenarios*=Scenario
         (load=Load)?
     '}'
 ;
 
-Load:
-    'load' '{'
-        'users' users=INT
-        'rampUp' ramp_up=Duration
-        'duration' duration=Duration
+AuthLogin:
+    'auth' 'login' '{'
+        'endpoint' endpoint=ValueOrRef
+        'method' method=HttpMethod
+        'body' body=BodyBlock
+        'format' format=STRING
     '}'
 ;
 
-Duration:
-    (hours=INT 'h')?
-    (minutes=INT 'm')?
-    (seconds=INT 's')?
+BodyBlock:
+    '{'
+        fields*=BodyField
+    '}'
+;
+
+BodyField:
+    name=ID '=' value=ValueOrRef
+;
+
+VariablesBlock:
+    'variables' '{'
+        vars*=VarEntry
+    '}'
+;
+
+VarEntry:
+    name=ID '=' value=ValueOrRef
+;
+
+ValueOrRef:
+    ref=Ref | value=STRING
+;
+
+Scenario:
+    'scenario' name=STRING '{'
+        steps*=ScenarioStep
+    '}'
+;
+
+ScenarioStep:
+    Request | ExpectStatus | ExpectJson
+;
+
+Request:
+    'request' method=HttpMethod path=STRING
+;
+
+ExpectStatus:
+    'expect' 'status' code=INT
+;
+
+ExpectJson:
+    'expect' 'json' path=STRING check=JsonCheck
+;
+
+JsonCheck:
+      kind='isArray'
+    | kind='notEmpty'
+    | kind='equals' value=ValueOrRef
+    | kind='hasSize' size=INT
+;
+
+HttpMethod:
+    'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 ;
 
 Target:
     ref=Ref | value=STRING
+;
+
+Ref:
+    '#' name=ID
 ;
 
 Environment:
@@ -42,6 +101,16 @@ EnvCall:
     'env' '(' key=STRING ')'
 ;
 
-Ref:
-    name=ID
+Load:
+    'load' '{'
+        'users' users=INT
+        'rampUp' ramp_up=Duration
+        'duration' duration=Duration
+    '}'
+;
+
+Duration:
+    (hours=INT 'h')?
+    (minutes=INT 'm')?
+    (seconds=INT 's')?
 ;

@@ -4,7 +4,34 @@ test "Hello DSL" {
     token   = env("TOKEN")
   }
 
-  target baseUrl
+  target #baseUrl
+
+  auth login {
+    endpoint "/auth/login"
+    method POST
+    body {
+      username = "admin"
+      password = "admin"
+    }
+    format "$.access_token"
+  }
+
+  variables {
+    q = "phone"
+    q2 = "laptop"
+  }
+
+  scenario "search" {
+    request GET "/catalog/search?q=${q}"
+    expect status 200
+    expect json "$.results" isArray
+    expect json "$.results[0].name" equals "iPhone 14"
+  }
+
+  scenario "search again" {
+    request GET "/catalog/search?q=${q2}"
+    expect status 200
+  }
 
   load {
     users 10

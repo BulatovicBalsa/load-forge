@@ -5,15 +5,22 @@ description = "Load testing DSL framework"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "httpx>=0.28.1",
+    "jsonpath-ng>=1.7.0",
     "python-dotenv>=1.2.1",
     "textx>=4.3.0",
 ]
 
 [project.scripts]
-loadforge = "loadforge.main:main"
+loadforge = "loadforge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
