@@ -20,6 +20,7 @@ from loadforge.runtime.interpolate import interpolate
 from loadforge.runtime.metrics import MetricsCollector
 
 
+
 # ---------------------------------------------------------------------------
 # Async step runners
 # ---------------------------------------------------------------------------
@@ -150,9 +151,9 @@ async def run_scenario_async(
                 raise RuntimeError("expect status used before any request")
             try:
                 _run_expect_status_step(last_response, step)
-            except AssertionError:
+            except AssertionError as exc:
                 # Mark the *most recent* request record as failed.
-                _mark_last_record_failed(metrics, str(step.code))
+                _mark_last_record_failed(metrics, str(exc))
                 return
 
         elif isinstance(step, ExpectJson):
@@ -198,10 +199,7 @@ async def _virtual_user(
     """
     if single_pass:
         for scenario in scenarios:
-            try:
-                await run_scenario_async(client, scenario, ctx, metrics)
-            except Exception:
-                pass
+            await run_scenario_async(client, scenario, ctx, metrics)
         return
 
     # Continuous loop until told to stop.
@@ -209,10 +207,7 @@ async def _virtual_user(
         for scenario in scenarios:
             if stop_event.is_set():
                 return
-            try:
-                await run_scenario_async(client, scenario, ctx, metrics)
-            except Exception:
-                pass
+            await run_scenario_async(client, scenario, ctx, metrics)
             # Yield control briefly so other users get a chance to run and
             # the stop-event can be checked promptly.
             await asyncio.sleep(0)
@@ -263,38 +258,43 @@ async def run_load_test_async(
             client.headers["Authorization"] = f"Bearer {ctx['authToken']}"
 
         metrics.start()
-        tasks: list[asyncio.Task] = []
+        try:
+            tasks: list[asyncio.Task] = []
 
-        # Spawn virtual users (with optional ramp-up delay).
-        for i in range(num_users):
-            task = asyncio.create_task(
-                _virtual_user(
-                    i, client, test.scenarios, ctx, metrics, stop_event,
-                    single_pass=single_pass,
-                ),
-                name=f"vu-{i}",
-            )
-            tasks.append(task)
-            if delay_between_users > 0 and i < num_users - 1:
-                await asyncio.sleep(delay_between_users)
+            # Spawn virtual users (with optional ramp-up delay).
+            for i in range(num_users):
+                task = asyncio.create_task(
+                    _virtual_user(
+                        i, client, test.scenarios, ctx, metrics, stop_event,
+                        single_pass=single_pass,
+                    ),
+                    name=f"vu-{i}",
+                )
+                tasks.append(task)
+                if delay_between_users > 0 and i < num_users - 1:
+                    await asyncio.sleep(delay_between_users)
 
-        if single_pass:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        else:
-            elapsed_so_far = metrics.elapsed_seconds
-            remaining = duration_seconds - elapsed_so_far
-            if remaining > 0:
-                await asyncio.sleep(remaining)
+            if single_pass:
+                # Single-pass mode: just wait for all users to finish their one
+                # pass through the scenarios.
+                await asyncio.gather(*tasks, return_exceptions=True)
+            else:
+                # Continuous mode: wait for the remaining duration, then signal
+                # stop and drain.
+                elapsed_so_far = metrics.elapsed_seconds
+                remaining = duration_seconds - elapsed_so_far
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
 
-            stop_event.set()
+                stop_event.set()
 
-            # Wait for in-flight iterations to finish (with a safety timeout).
-            done, pending = await asyncio.wait(tasks, timeout=30.0)
-            for t in pending:
-                t.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-
-        metrics.stop()
+                # Wait for in-flight iterations to finish (with a safety timeout).
+                done, pending = await asyncio.wait(tasks, timeout=30.0)
+                for t in pending:
+                    t.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+        finally:
+            metrics.stop()
 
     return metrics
