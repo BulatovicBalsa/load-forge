@@ -1,0 +1,18 @@
+test "Load Test Demo" {
+  environment {
+    baseUrl = env("BASE_URL")
+  }
+
+  target #baseUrl
+
+  scenario "fetch index" {
+    request GET "/"
+    expect status 200
+  }
+
+  load {
+    users 5
+    rampUp 2s
+    duration 5s
+  }
+}

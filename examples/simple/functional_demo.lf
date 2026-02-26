@@ -1,0 +1,12 @@
+test "Functional Test Demo" {
+  environment {
+    baseUrl = env("BASE_URL")
+  }
+
+  target #baseUrl
+
+  scenario "fetch index" {
+    request GET "/"
+    expect status 200
+  }
+}
