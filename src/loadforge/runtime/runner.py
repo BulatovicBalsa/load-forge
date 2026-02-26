@@ -140,9 +140,6 @@ def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
             auth_error=auth_error,
         )
 
-    # Determine async transport for the load executor. (used for testing with httpx.MockTransport)
-    async_transport = transport if transport is not None else None
-
     # Run the load test (or single-pass functional test).
     metrics = asyncio.run(
         run_load_test_async(
@@ -152,7 +149,7 @@ def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
             num_users=num_users,
             ramp_up_seconds=ramp_up_seconds,
             duration_seconds=duration_seconds,
-            transport=async_transport,
+            transport=transport
         )
     )
 
