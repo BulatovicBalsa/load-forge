@@ -10,26 +10,38 @@ from .parser.parse import parse_file
 from .runtime.runner import run_test
 
 
-def load_env_from_cwd() -> None:
-    p = Path.cwd() / ".env"
-    if p.exists():
-        load_dotenv(dotenv_path=p, override=False)
-
-
-def parse_args() -> Path:
-    if len(sys.argv) < 2:
-        print("Usage: loadforge <file.lf>", file=sys.stderr)
+def parse_args() -> tuple[Path, Path | None]:
+    if len(sys.argv) not in (2, 3):
+        print("Usage: loadforge <file.lf> [env path]", file=sys.stderr)
         raise SystemExit(2)
     p = Path(sys.argv[1]).resolve()
     if not p.exists():
         print(f"File not found: {p}", file=sys.stderr)
         raise SystemExit(2)
-    return p
+
+    if len(sys.argv) == 3:
+        env = Path(sys.argv[2]).resolve()
+        if not env.exists():
+            print(f"Env file not found: {env}", file=sys.stderr)
+            raise SystemExit(2)
+        return p, env
+
+    return p, None
 
 
 def main() -> None:
-    load_env_from_cwd()
-    model = parse_file(parse_args())
+    file, env = parse_args()
+    model = parse_file(file)
+    if env is None:
+        has_env_vars = bool(
+            model.test and model.test.environment and model.test.environment.envVars
+        )
+        if has_env_vars:
+            raise RuntimeError(
+                "Environment variables are declared in the .lf file, but no env file path was provided."
+            )
+    else:
+        load_dotenv(dotenv_path=env, override=False)
     result = run_test(model)
     print(result)
 
