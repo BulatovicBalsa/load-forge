@@ -24,8 +24,10 @@ test "Hello DSL" {
   scenario "search" {
     request GET "/catalog/search?q=${q}"
     expect status 200
-    expect json "$.results" isArray
-    expect json "$.results[0].name" equals "iPhone 14"
+    expect json $.results isArray
+    expect json $.results[0].name equals "iPhone 14"
+    expect json $.data.items[*] notEmpty
+    expect json $.count hasSize 3
   }
 
   scenario "search again" {
