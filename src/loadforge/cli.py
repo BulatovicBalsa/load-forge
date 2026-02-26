@@ -10,22 +10,16 @@ from .parser.parse import parse_file
 from .runtime.runner import run_test
 
 
-def load_env_from_cwd() -> None:
-    p = Path.cwd() / ".env"
-    if p.exists():
-        load_dotenv(dotenv_path=p, override=False)
-
-
-def parse_args() -> tuple[Path, Path | None]:
-    if len(sys.argv) < 2:
-        print("Usage: loadforge <file.lf>", file=sys.stderr)
+def parse_args() -> tuple[Path, Path]:
+    if len(sys.argv) < 3:
+        print("Usage: loadforge <file.lf> <env path>", file=sys.stderr)
         raise SystemExit(2)
     p = Path(sys.argv[1]).resolve()
     if not p.exists():
         print(f"File not found: {p}", file=sys.stderr)
         raise SystemExit(2)
-    env = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else None
-    if env and not env.exists():
+    env = Path(sys.argv[2]).resolve()
+    if not env.exists():
         print(f"Env file not found: {env}", file=sys.stderr)
         raise SystemExit(2)
 
@@ -34,10 +28,7 @@ def parse_args() -> tuple[Path, Path | None]:
 
 def main() -> None:
     file, env = parse_args()
-    if env:
-        load_dotenv(dotenv_path=env, override=False)
-    else:
-        load_env_from_cwd()
+    load_dotenv(dotenv_path=env, override=False)
     model = parse_file(file)
     result = run_test(model)
     print(result)
