@@ -16,7 +16,7 @@ def load_env_from_cwd() -> None:
         load_dotenv(dotenv_path=p, override=False)
 
 
-def parse_args() -> Path:
+def parse_args() -> tuple[Path, Path | None]:
     if len(sys.argv) < 2:
         print("Usage: loadforge <file.lf>", file=sys.stderr)
         raise SystemExit(2)
@@ -24,12 +24,21 @@ def parse_args() -> Path:
     if not p.exists():
         print(f"File not found: {p}", file=sys.stderr)
         raise SystemExit(2)
-    return p
+    env = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else None
+    if env and not env.exists():
+        print(f"Env file not found: {env}", file=sys.stderr)
+        raise SystemExit(2)
+
+    return p, env
 
 
 def main() -> None:
-    load_env_from_cwd()
-    model = parse_file(parse_args())
+    file, env = parse_args()
+    if env:
+        load_dotenv(dotenv_path=env, override=False)
+    else:
+        load_env_from_cwd()
+    model = parse_file(file)
     result = run_test(model)
     print(result)
 
