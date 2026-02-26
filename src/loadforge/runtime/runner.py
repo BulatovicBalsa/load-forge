@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio
 from typing import Optional
 
 import httpx
@@ -9,8 +12,9 @@ from .context import (
     build_context,
     resolve_target,
 )
-from .executor import run_scenario
-from .run_result import RunResult, ScenarioResult, AuthResult
+from .load_executor import run_load_test_async
+from .load_result import LoadTestResult
+from .metrics import MetricsSummary
 from .timing import timed
 from ..model import TestFile
 
@@ -33,33 +37,9 @@ def _build_runtime_context(t) -> tuple[str, dict[str, str]]:
     return base_url, ctx
 
 
-def _run_auth_if_present(client, t, ctx) -> Optional[AuthResult]:
-    if t.auth is None:
-        return None
-
-    try:
-        _, duration = _run_auth_timed(client, t, ctx)
-        success = True
-        error = None
-    except Exception as e:
-        duration = 0.0
-        success = False
-        error = str(e)
-
-    endpoint_str = "<missing-endpoint>"
-    if t.auth.endpoint is not None:
-        if getattr(t.auth.endpoint, "value", ""):
-            endpoint_str = t.auth.endpoint.value.strip().strip('"')
-        elif getattr(t.auth.endpoint, "ref", None) is not None:
-            endpoint_str = f"#{t.auth.endpoint.ref.name}"
-
-    return AuthResult(
-        endpoint=endpoint_str,
-        method=t.auth.method,
-        duration_seconds=duration,
-        success=success,
-        error=error,
-    )
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
 
 
 def _execute_auth(client, t, ctx):
@@ -79,59 +59,108 @@ def _run_auth_timed(client, t, ctx):
     return _execute_auth(client, t, ctx)
 
 
-def _run_scenarios(
-    client: httpx.Client,
-    t,
-    ctx: dict[str, str],
-) -> list[ScenarioResult]:
-    results: list[ScenarioResult] = []
+def _run_auth_sync(base_url: str, t, ctx, transport=None) -> tuple[Optional[bool], Optional[str]]:
+    """
+    Run auth login synchronously (once, before the load test begins).
+    """
+    if t.auth is None:
+        return None, None
 
-    for sc in t.scenarios:
-        name = sc.name.strip().strip('"')
-        r = ScenarioResult(name=name)
-
+    sync_transport = transport if isinstance(transport, httpx.MockTransport) else None
+    with httpx.Client(base_url=base_url, transport=sync_transport) as auth_client:
         try:
-            r.requests = run_scenario(client, sc, ctx)
-            r.success = True
+            _execute_auth(auth_client, t, ctx)
+            return True, None
         except Exception as e:
-            r.success = False
-            r.error = str(e)
-
-        results.append(r)
-
-    return results
+            return False, str(e)
 
 
-def _run_test_internal(model: TestFile, transport=None) -> RunResult:
+# ---------------------------------------------------------------------------
+# Load parameters
+# ---------------------------------------------------------------------------
+
+
+def _resolve_load_params(t) -> tuple[int, float, float]:
+    """
+    Extract (num_users, ramp_up_seconds, duration_seconds) from the test
+    model. If no load block is present, defaults to single-pass mode."""
+    if t.load is not None and t.load.users > 0:
+        return (
+            t.load.users,
+            t.load.ramp_up.total_seconds(),
+            t.load.duration.total_seconds(),
+        )
+    return 1, 0.0, 0.0
+
+
+# ---------------------------------------------------------------------------
+# Empty summary helper
+# ---------------------------------------------------------------------------
+
+_EMPTY_SUMMARY = MetricsSummary(
+    total_requests=0,
+    successful_requests=0,
+    failed_requests=0,
+    error_rate=0.0,
+    latency_min_ms=0.0,
+    latency_max_ms=0.0,
+    latency_avg_ms=0.0,
+    latency_p50_ms=0.0,
+    latency_p95_ms=0.0,
+    latency_p99_ms=0.0,
+    requests_per_sec=0.0,
+    duration_seconds=0.0,
+)
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+
+def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
+    """
+    Run the test described by *model*.
+    """
     t = _get_test(model)
     base_url, ctx = _build_runtime_context(t)
+    num_users, ramp_up_seconds, duration_seconds = _resolve_load_params(t)
 
-    with httpx.Client(base_url=base_url, transport=transport) as client:
-        auth_result = _run_auth_if_present(client, t, ctx)
-        if auth_result and not auth_result.success:
-            return RunResult(
-                test_name=t.name.strip().strip('"'),
-                duration_seconds=0.0,
-                scenarios=[],
-                auth=auth_result,
-            )
+    # Run auth synchronously before the load test.
+    auth_success, auth_error = _run_auth_sync(base_url, t, ctx, transport=transport)
 
-        scenarios = _run_scenarios(client, t, ctx)
+    if auth_success is False:
+        return LoadTestResult(
+            test_name=t.name.strip().strip('"'),
+            users=num_users,
+            ramp_up_seconds=ramp_up_seconds,
+            target_duration_seconds=duration_seconds,
+            summary=_EMPTY_SUMMARY,
+            auth_success=auth_success,
+            auth_error=auth_error,
+        )
 
-    return RunResult(
-        test_name=t.name.strip().strip('"'),
-        duration_seconds=0.0,
-        scenarios=scenarios,
-        auth=auth_result,
+    # Run the load test (or single-pass functional test).
+    metrics = asyncio.run(
+        run_load_test_async(
+            test=t,
+            base_url=base_url,
+            ctx=ctx,
+            num_users=num_users,
+            ramp_up_seconds=ramp_up_seconds,
+            duration_seconds=duration_seconds,
+            transport=transport
+        )
     )
 
+    summary = metrics.summary()
 
-@timed
-def _run_test_timed(model: TestFile, transport=None):
-    return _run_test_internal(model, transport)
-
-
-def run_test(model: TestFile, *, transport=None) -> RunResult:
-    result, duration = _run_test_timed(model, transport)
-    result.duration_seconds = duration
-    return result
+    return LoadTestResult(
+        test_name=t.name.strip().strip('"'),
+        users=num_users,
+        ramp_up_seconds=ramp_up_seconds,
+        target_duration_seconds=duration_seconds,
+        summary=summary,
+        auth_success=auth_success,
+        auth_error=auth_error,
+    )
