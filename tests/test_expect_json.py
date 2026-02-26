@@ -82,4 +82,4 @@ def test_expect_json_has_size_fails_when_size_differs():
 
     result = run_test(model, transport=transport)
     assert result.failed == 1
-    assert result.failed == 1
+    assert result.total_requests == 1
