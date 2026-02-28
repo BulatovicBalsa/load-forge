@@ -42,6 +42,10 @@ def _ok_transport(json_body: dict):
     '$.count',
     '$.data[0]',
     '$.user.profile.name',
+    "$['test']",
+    "$['something-with-dash']",
+    "$['items']['name']",
+    "$.items['name']",
 ])
 def test_valid_json_path_is_accepted(path):
     model = parse_str(_dsl_with_path(path))
@@ -64,15 +68,19 @@ def test_invalid_json_path_is_rejected_by_parser(path):
 
 def test_bare_dollar_is_rejected():
     with pytest.raises(TextXSyntaxError):
-        parse_str(_dsl_with_path('"$"'))
+        parse_str(_dsl_with_path('$'))
 
 
-def test_json_path_stored_correctly_on_model():
-    """Parsed path must match exactly what was written."""
-    model = parse_str(_dsl_with_path('$.results[0].name'))
+@pytest.mark.parametrize("path,expected", [
+    ("$.results[0].name", "$.results[0].name"),
+    ("$['results']",      "$['results']"),
+    ("$['some-key']",     "$['some-key']"),
+])
+def test_json_path_stored_correctly_on_model(path, expected):
+    model = parse_str(_dsl_with_path(path))
     steps = model.test.scenarios[0].steps
     expect_step = next(s for s in steps if isinstance(s, ExpectJson))
-    assert expect_step.path == "$.results[0].name"
+    assert expect_step.path == expected
 
 
 def test_valid_path_evaluates_array_successfully():
@@ -147,3 +155,47 @@ def test_path_not_found_in_response_fails():
     )
     assert result.failed == 1
     assert result.scenarios[0].success is False
+
+
+def test_bracket_notation_evaluates_correctly():
+    model = parse_str(r'''
+    test "t" {
+      target "http://api.test"
+      scenario "s" {
+        request GET "/x"
+        expect status 200
+        expect json $['results'] isArray
+      }
+    }
+    ''')
+    result = run_test(
+        model,
+        transport=_ok_transport({"results": [1, 2, 3]})
+    )
+    assert result.failed == 0
+    assert result.scenarios[0].success is True, (
+        f"Bracket notation failed, jsonpath-ng may not support it. "
+        f"Error: {result.scenarios[0].error}"
+    )
+
+
+def test_bracket_notation_with_dash_evaluates_correctly():
+    model = parse_str(r'''
+    test "t" {
+      target "http://api.test"
+      scenario "s" {
+        request GET "/x"
+        expect status 200
+        expect json $['some-key'] isArray
+      }
+    }
+    ''')
+    result = run_test(
+        model,
+        transport=_ok_transport({"some-key": [1, 2, 3]})
+    )
+    assert result.failed == 0
+    assert result.scenarios[0].success is True, (
+        f"Bracket notation failed, jsonpath-ng may not support it. "
+        f"Error: {result.scenarios[0].error}"
+    )
