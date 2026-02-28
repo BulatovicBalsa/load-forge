@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from typing import Any, Optional
 
@@ -19,6 +20,76 @@ from loadforge.runtime.context import resolve_value_or_ref
 from loadforge.runtime.interpolate import interpolate
 from loadforge.runtime.metrics import MetricsCollector
 
+
+# ---------------------------------------------------------------------------
+# Live progress display
+# ---------------------------------------------------------------------------
+
+SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+class _ProgressDisplay:
+    """
+    Prints a single status line that overwrites itself using \\r.
+    Only active in continuous mode (duration > 0).
+    """
+
+    def __init__(
+        self,
+        metrics: MetricsCollector,
+        num_users: int,
+        duration_seconds: float,
+        tasks: list[asyncio.Task],
+    ) -> None:
+        self._metrics = metrics
+        self._num_users = num_users
+        self._duration_seconds = duration_seconds
+        self._tasks = tasks
+        self._frame: int = 0
+        self._task: Optional[asyncio.Task] = None
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._loop(), name="progress")
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        # Clear the status line.
+        sys.stderr.write("\r\033[K")
+        sys.stderr.flush()
+
+    async def _loop(self) -> None:
+        try:
+            while True:
+                self._render()
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            return
+
+    def _render(self) -> None:
+        spinner = SPINNER_FRAMES[self._frame % len(SPINNER_FRAMES)]
+        self._frame += 1
+
+        elapsed = self._metrics.elapsed_seconds
+        total_reqs = len(self._metrics.records)
+        rps = total_reqs / elapsed if elapsed > 0 else 0.0
+        errors = sum(1 for r in self._metrics.records if not r.success)
+        active = sum(1 for t in self._tasks if not t.done())
+
+        line = (
+            f"\r\033[K{spinner} "
+            f"{elapsed:>5.1f}s / {self._duration_seconds:.0f}s"
+            f" │ Users: {active}/{self._num_users}"
+            f" │ Reqs: {total_reqs:,}"
+            f" │ Req/s: {rps:.1f}"
+            f" │ Errors: {errors:,}"
+        )
+        sys.stderr.write(line)
+        sys.stderr.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -253,11 +324,11 @@ async def run_load_test_async(
         client_kwargs["transport"] = transport
 
     async with httpx.AsyncClient(**client_kwargs) as client:
-        # Copy auth header if present in ctx.
         if "authToken" in ctx:
             client.headers["Authorization"] = f"Bearer {ctx['authToken']}"
 
         metrics.start()
+        progress: Optional[_ProgressDisplay] = None
         try:
             tasks: list[asyncio.Task] = []
 
@@ -271,16 +342,20 @@ async def run_load_test_async(
                     name=f"vu-{i}",
                 )
                 tasks.append(task)
+
+                # Start progress display after the first user is spawned.
+                if not single_pass and i == 0:
+                    progress = _ProgressDisplay(
+                        metrics, num_users, duration_seconds, tasks,
+                    )
+                    progress.start()
+
                 if delay_between_users > 0 and i < num_users - 1:
                     await asyncio.sleep(delay_between_users)
 
             if single_pass:
-                # Single-pass mode: just wait for all users to finish their one
-                # pass through the scenarios.
                 await asyncio.gather(*tasks, return_exceptions=True)
             else:
-                # Continuous mode: wait for the remaining duration, then signal
-                # stop and drain.
                 elapsed_so_far = metrics.elapsed_seconds
                 remaining = duration_seconds - elapsed_so_far
                 if remaining > 0:
@@ -288,13 +363,14 @@ async def run_load_test_async(
 
                 stop_event.set()
 
-                # Wait for in-flight iterations to finish (with a safety timeout).
                 done, pending = await asyncio.wait(tasks, timeout=30.0)
                 for t in pending:
                     t.cancel()
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
         finally:
+            if progress is not None:
+                await progress.stop()
             metrics.stop()
 
     return metrics
