@@ -65,7 +65,11 @@ ExpectStatus:
 ;
 
 ExpectJson:
-    'expect' 'json' path=STRING check=JsonCheck
+    'expect' 'json' path=JsonPath check=JsonCheck
+;
+
+JsonPath:
+    /\$[\.\[][A-Za-z0-9_\-\.\[\]\*\?\@\:\'\"]+/
 ;
 
 JsonCheck:
