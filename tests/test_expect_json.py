@@ -289,6 +289,34 @@ def test_isBool_fails_for_string():
     assert _failed(result)
 
 
+# ── contains ─────────────────────────────────────────────────────────────────
+
+def test_contains_passes_for_list_with_element():
+    assert _passed(_run('expect json $.tags contains "python"', {"tags": ["python", "go"]}))
+
+
+def test_contains_passes_for_string_with_substring():
+    assert _passed(_run('expect json $.msg contains "success"', {"msg": "operation success"}))
+
+
+def test_contains_fails_when_element_not_in_list():
+    result = _run('expect json $.tags contains "rust"', {"tags": ["python", "go"]})
+    assert _failed(result)
+    assert any("contain" in e.lower() for e in _errors(result))
+
+
+def test_contains_fails_when_substring_not_in_string():
+    result = _run('expect json $.msg contains "error"', {"msg": "all good"})
+    assert _failed(result)
+
+
+def test_contains_fails_for_non_list_non_string():
+    """contains na broj treba baciti grešku."""
+    result = _run('expect json $.count contains "1"', {"count": 123})
+    assert _failed(result)
+    assert any("requires list or string" in e.lower() for e in _errors(result))
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
