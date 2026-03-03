@@ -73,6 +73,15 @@ JsonCheck:
     | kind='notEmpty'
     | kind='equals' value=ValueOrRef
     | kind='hasSize' size=INT
+    | kind='contains' value=ValueOrRef
+    | kind='matches'  value=ValueOrRef
+    | kind='isEmpty'
+    | kind='isNull'
+    | kind='notNull'
+    | kind='isObject'
+    | kind='isString'
+    | kind='isNumber'
+    | kind='isBool'
 ;
 
 HttpMethod:
