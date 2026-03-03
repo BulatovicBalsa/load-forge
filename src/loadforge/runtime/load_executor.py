@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
+import re
 from typing import Any, Optional
 
 import httpx
@@ -148,6 +149,17 @@ def _run_expect_json_step(
                 raise AssertionError(
                     f"Expected JSON path to be not empty, got: {value!r}"
                 )
+        case JsonCheckKind.isEmpty:
+            value = _first_match_value(matches, step.path)
+            if not isinstance(value, (list, dict, str)):
+                raise AssertionError(
+                    f"Expected '{step.path}' to be a list/dict/str for isEmpty, "
+                    f"got: {type(value).__name__}"
+                )
+            if len(value) != 0:
+                raise AssertionError(
+                    f"Expected '{step.path}' to be empty, got {len(value)} elements"
+                )
         case JsonCheckKind.equals:
             expected = resolve_value_or_ref(step.check.value, ctx)
             value = _first_match_value(matches, step.path)
@@ -165,6 +177,79 @@ def _run_expect_json_step(
             if actual != step.check.size:
                 raise AssertionError(
                     f"JSON size mismatch, expected: {step.check.size}, got: {actual}"
+                )
+        case JsonCheckKind.isNull:
+            if not matches or matches[0].value is not None:
+                actual = matches[0].value if matches else "<no match>"
+                raise AssertionError(
+                    f"Expected '{step.path}' to be null, got: {actual!r}"
+                )
+        case JsonCheckKind.notNull:
+            if not matches or matches[0].value is None:
+                raise AssertionError(
+                    f"Expected '{step.path}' to be not null, got null or no match"
+                )
+        case JsonCheckKind.isObject:
+            value = _first_match_value(matches, step.path)
+            if not isinstance(value, dict):
+                raise AssertionError(
+                    f"Expected '{step.path}' to be an object, "
+                    f"got: {type(value).__name__}"
+                )
+        case JsonCheckKind.isString:
+            value = _first_match_value(matches, step.path)
+            if not isinstance(value, str):
+                raise AssertionError(
+                    f"Expected '{step.path}' to be a string, "
+                    f"got: {type(value).__name__}"
+                )
+        case JsonCheckKind.isNumber:
+            value = _first_match_value(matches, step.path)
+            # bool je subclass int u Pythonu
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise AssertionError(
+                    f"Expected '{step.path}' to be a number, "
+                    f"got: {type(value).__name__}"
+                )
+        case JsonCheckKind.isBool:
+            value = _first_match_value(matches, step.path)
+            if not isinstance(value, bool):
+                raise AssertionError(
+                    f"Expected '{step.path}' to be a boolean, "
+                    f"got: {type(value).__name__}"
+                )
+        case JsonCheckKind.contains:
+            expected = resolve_value_or_ref(step.check.value, ctx)
+            value = _first_match_value(matches, step.path)
+            if isinstance(value, list):
+                if expected not in [str(v) for v in value]:
+                    raise AssertionError(
+                        f"Expected '{step.path}' to contain {expected!r}, "
+                        f"got: {value!r}"
+                    )
+            elif isinstance(value, str):
+                if expected not in value:
+                    raise AssertionError(
+                        f"Expected '{step.path}' to contain {expected!r}, "
+                        f"got: {value!r}"
+                    )
+            else:
+                raise AssertionError(
+                    f"'contains' requires list or string at '{step.path}', "
+                    f"got: {type(value).__name__}"
+                )
+        case JsonCheckKind.matches:
+            pattern = resolve_value_or_ref(step.check.value, ctx)
+            value = _first_match_value(matches, step.path)
+            if not isinstance(value, str):
+                raise AssertionError(
+                    f"'matches' requires string at '{step.path}', "
+                    f"got: {type(value).__name__}"
+                )
+            if not re.search(pattern, value):
+                raise AssertionError(
+                    f"Expected '{step.path}' to match pattern {pattern!r}, "
+                    f"got: {value!r}"
                 )
         case _:
             raise RuntimeError(f"Unsupported JsonCheckKind: {kind!r}")

@@ -10,6 +10,15 @@ class JsonCheckKind(Enum):
     notEmpty = "notEmpty"
     equals = "equals"
     hasSize = "hasSize"
+    isEmpty = "isEmpty"
+    isNull = "isNull"
+    notNull = "notNull"
+    isObject = "isObject"
+    isString = "isString"
+    isNumber = "isNumber"
+    isBool = "isBool"
+    contains = "contains"
+    matches = "matches"
 
 
 @dataclass
