@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 import sys
 import time
 from typing import Any, Optional
@@ -251,6 +252,39 @@ def _mark_last_record_failed(metrics: MetricsCollector, error: str) -> None:
         last.error = error
 
 
+async def _wait_for_stop_or_timeout(stop_event: asyncio.Event, seconds: float) -> bool:
+    """
+    Wait for stop_event up to *seconds*.
+    Returns True if stop was requested, False if timeout elapsed first.
+    """
+    if seconds <= 0:
+        return stop_event.is_set()
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=seconds)
+        return True
+    except asyncio.TimeoutError:
+        return stop_event.is_set()
+
+
+async def _drain_virtual_users(
+    tasks: list[asyncio.Task],
+    stop_event: asyncio.Event,
+    timeout: float = 30.0,
+) -> None:
+    """
+    Gracefully ask virtual users to stop, then cancel leftovers after timeout.
+    """
+    stop_event.set()
+    if not tasks:
+        return
+
+    _, pending = await asyncio.wait(tasks, timeout=timeout)
+    for t in pending:
+        t.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 # ---------------------------------------------------------------------------
 # Virtual user coroutine
 # ---------------------------------------------------------------------------
@@ -270,6 +304,8 @@ async def _virtual_user(
     """
     if single_pass:
         for scenario in scenarios:
+            if stop_event.is_set():
+                return
             await run_scenario_async(client, scenario, ctx, metrics)
         return
 
@@ -318,6 +354,14 @@ async def run_load_test_async(
 
     metrics = MetricsCollector()
     stop_event = asyncio.Event()
+    stop_reason: Optional[str] = None
+
+    def _request_stop(reason: str) -> None:
+        nonlocal stop_reason
+        if stop_reason is None:
+            stop_reason = reason
+        metrics.mark_interrupted(reason=stop_reason)
+        stop_event.set()
 
     client_kwargs: dict = {"base_url": base_url}
     if transport is not None:
@@ -329,11 +373,23 @@ async def run_load_test_async(
 
         metrics.start()
         progress: Optional[_ProgressDisplay] = None
-        try:
-            tasks: list[asyncio.Task] = []
+        tasks: list[asyncio.Task] = []
 
+        loop = asyncio.get_running_loop()
+        handled_signals: list[int] = []
+        if hasattr(loop, "add_signal_handler"):
+            try:
+                loop.add_signal_handler(signal.SIGTERM, _request_stop, "SIGTERM")
+                handled_signals.append(signal.SIGTERM)
+            except (NotImplementedError, RuntimeError, ValueError):
+                pass
+
+        try:
             # Spawn virtual users (with optional ramp-up delay).
             for i in range(num_users):
+                if stop_event.is_set():
+                    break
+
                 task = asyncio.create_task(
                     _virtual_user(
                         i, client, test.scenarios, ctx, metrics, stop_event,
@@ -351,24 +407,35 @@ async def run_load_test_async(
                     progress.start()
 
                 if delay_between_users > 0 and i < num_users - 1:
-                    await asyncio.sleep(delay_between_users)
+                    stop_requested = await _wait_for_stop_or_timeout(
+                        stop_event, delay_between_users
+                    )
+                    if stop_requested:
+                        break
 
             if single_pass:
-                await asyncio.gather(*tasks, return_exceptions=True)
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 elapsed_so_far = metrics.elapsed_seconds
                 remaining = duration_seconds - elapsed_so_far
                 if remaining > 0:
-                    await asyncio.sleep(remaining)
+                    timed_out = not await _wait_for_stop_or_timeout(
+                        stop_event, remaining
+                    )
+                    if timed_out:
+                        stop_event.set()
+                else:
+                    stop_event.set()
 
-                stop_event.set()
-
-                done, pending = await asyncio.wait(tasks, timeout=30.0)
-                for t in pending:
-                    t.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
+                await _drain_virtual_users(tasks, stop_event, timeout=30.0)
+        except asyncio.CancelledError:
+            # Ctrl+C (SIGINT) reaches us as cancellation via asyncio.run().
+            _request_stop("SIGINT")
+            await _drain_virtual_users(tasks, stop_event, timeout=30.0)
         finally:
+            for sig in handled_signals:
+                loop.remove_signal_handler(sig)
             if progress is not None:
                 await progress.stop()
             metrics.stop()

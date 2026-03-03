@@ -138,6 +138,8 @@ def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
             summary=_EMPTY_SUMMARY,
             auth_success=auth_success,
             auth_error=auth_error,
+            interrupted=False,
+            stop_reason=None,
         )
 
     # Run the load test (or single-pass functional test).
@@ -163,4 +165,6 @@ def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
         summary=summary,
         auth_success=auth_success,
         auth_error=auth_error,
+        interrupted=metrics.interrupted,
+        stop_reason=metrics.stop_reason,
     )
