@@ -170,6 +170,24 @@ def test_hasSize_fails_for_non_sized_type():
     assert _failed(result)
 
 
+# ── isNull ────────────────────────────────────────────────────────────────────
+
+def test_isNull_passes_when_field_is_null():
+    assert _passed(_run("expect json $.deleted_at isNull", {"deleted_at": None}))
+
+
+def test_isNull_fails_when_field_has_value():
+    result = _run("expect json $.deleted_at isNull", {"deleted_at": "2024-01-01"})
+    assert _failed(result)
+    assert any("null" in e.lower() for e in _errors(result))
+
+
+def test_isNull_fails_when_field_missing():
+    """Path ne postoji u responsu — treba biti fail."""
+    result = _run("expect json $.deleted_at isNull", {"other": "value"})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
