@@ -210,6 +210,23 @@ def test_notNull_fails_when_field_is_null():
     assert any("null" in e.lower() for e in _errors(result))
 
 
+# ── isObject ──────────────────────────────────────────────────────────────────
+
+def test_isObject_passes_for_dict():
+    assert _passed(_run("expect json $.user isObject", {"user": {"name": "John"}}))
+
+
+def test_isObject_fails_for_list():
+    result = _run("expect json $.user isObject", {"user": [1, 2]})
+    assert _failed(result)
+    assert any("object" in e.lower() for e in _errors(result))
+
+
+def test_isObject_fails_for_string():
+    result = _run("expect json $.user isObject", {"user": "John"})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
