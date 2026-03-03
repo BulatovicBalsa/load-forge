@@ -18,6 +18,11 @@ from loadforge.model import (
     Test,
 )
 from loadforge.runtime.context import resolve_value_or_ref
+from loadforge.runtime.control import (
+    drain_virtual_users,
+    start_stdin_control_listener,
+    wait_for_stop_or_timeout,
+)
 from loadforge.runtime.interpolate import interpolate
 from loadforge.runtime.metrics import MetricsCollector
 
@@ -252,39 +257,6 @@ def _mark_last_record_failed(metrics: MetricsCollector, error: str) -> None:
         last.error = error
 
 
-async def _wait_for_stop_or_timeout(stop_event: asyncio.Event, seconds: float) -> bool:
-    """
-    Wait for stop_event up to *seconds*.
-    Returns True if stop was requested, False if timeout elapsed first.
-    """
-    if seconds <= 0:
-        return stop_event.is_set()
-    try:
-        await asyncio.wait_for(stop_event.wait(), timeout=seconds)
-        return True
-    except asyncio.TimeoutError:
-        return stop_event.is_set()
-
-
-async def _drain_virtual_users(
-    tasks: list[asyncio.Task],
-    stop_event: asyncio.Event,
-    timeout: float = 30.0,
-) -> None:
-    """
-    Gracefully ask virtual users to stop, then cancel leftovers after timeout.
-    """
-    stop_event.set()
-    if not tasks:
-        return
-
-    _, pending = await asyncio.wait(tasks, timeout=timeout)
-    for t in pending:
-        t.cancel()
-    if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
-
-
 # ---------------------------------------------------------------------------
 # Virtual user coroutine
 # ---------------------------------------------------------------------------
@@ -333,6 +305,7 @@ async def run_load_test_async(
     ramp_up_seconds: float = 0.0,
     duration_seconds: float = 0.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
+    control_stdin: bool = False,
 ) -> MetricsCollector:
     """
     Run the load test for the given *test*.
@@ -384,6 +357,12 @@ async def run_load_test_async(
             except (NotImplementedError, RuntimeError, ValueError):
                 pass
 
+        start_stdin_control_listener(
+            loop=loop,
+            enabled=control_stdin,
+            request_stop=_request_stop,
+        )
+
         try:
             # Spawn virtual users (with optional ramp-up delay).
             for i in range(num_users):
@@ -407,7 +386,7 @@ async def run_load_test_async(
                     progress.start()
 
                 if delay_between_users > 0 and i < num_users - 1:
-                    stop_requested = await _wait_for_stop_or_timeout(
+                    stop_requested = await wait_for_stop_or_timeout(
                         stop_event, delay_between_users
                     )
                     if stop_requested:
@@ -420,7 +399,7 @@ async def run_load_test_async(
                 elapsed_so_far = metrics.elapsed_seconds
                 remaining = duration_seconds - elapsed_so_far
                 if remaining > 0:
-                    timed_out = not await _wait_for_stop_or_timeout(
+                    timed_out = not await wait_for_stop_or_timeout(
                         stop_event, remaining
                     )
                     if timed_out:
@@ -428,11 +407,11 @@ async def run_load_test_async(
                 else:
                     stop_event.set()
 
-                await _drain_virtual_users(tasks, stop_event, timeout=30.0)
+                await drain_virtual_users(tasks, stop_event, timeout=30.0)
         except asyncio.CancelledError:
             # Ctrl+C (SIGINT) reaches us as cancellation via asyncio.run().
             _request_stop("SIGINT")
-            await _drain_virtual_users(tasks, stop_event, timeout=30.0)
+            await drain_virtual_users(tasks, stop_event, timeout=30.0)
         finally:
             for sig in handled_signals:
                 loop.remove_signal_handler(sig)

@@ -118,7 +118,12 @@ _EMPTY_SUMMARY = MetricsSummary(
 # ---------------------------------------------------------------------------
 
 
-def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
+def run_test(
+    model: TestFile,
+    *,
+    transport=None,
+    control_stdin: bool = False,
+) -> LoadTestResult:
     """
     Run the test described by *model*.
     """
@@ -151,7 +156,8 @@ def run_test(model: TestFile, *, transport=None) -> LoadTestResult:
             num_users=num_users,
             ramp_up_seconds=ramp_up_seconds,
             duration_seconds=duration_seconds,
-            transport=transport
+            transport=transport,
+            control_stdin=control_stdin,
         )
     )
 
