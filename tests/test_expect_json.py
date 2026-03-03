@@ -149,6 +149,27 @@ def test_equals_fails_for_different_value():
     assert any("mismatch" in e.lower() for e in _errors(result))
 
 
+# ── hasSize ───────────────────────────────────────────────────────────────────
+
+def test_hasSize_passes_for_list():
+    assert _passed(_run("expect json $.results hasSize 3", {"results": [1, 2, 3]}))
+
+
+def test_hasSize_passes_for_string():
+    assert _passed(_run("expect json $.name hasSize 5", {"name": "hello"}))
+
+
+def test_hasSize_fails_when_size_differs():
+    result = _run("expect json $.results hasSize 2", {"results": [1, 2, 3]})
+    assert _failed(result)
+    assert any("size mismatch" in e.lower() for e in _errors(result))
+
+
+def test_hasSize_fails_for_non_sized_type():
+    result = _run("expect json $.count hasSize 1", {"count": 42})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
