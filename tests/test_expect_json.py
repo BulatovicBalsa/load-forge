@@ -267,6 +267,28 @@ def test_isNumber_fails_for_bool():
     assert any("number" in e.lower() for e in _errors(result))
 
 
+# ── isBool ────────────────────────────────────────────────────────────────────
+
+def test_isBool_passes_for_true():
+    assert _passed(_run("expect json $.active isBool", {"active": True}))
+
+
+def test_isBool_passes_for_false():
+    assert _passed(_run("expect json $.active isBool", {"active": False}))
+
+
+def test_isBool_fails_for_int():
+    """1 i 0 nisu bool u JSON kontekstu, mora biti odbijen."""
+    result = _run("expect json $.active isBool", {"active": 1})
+    assert _failed(result)
+    assert any("boolean" in e.lower() for e in _errors(result))
+
+
+def test_isBool_fails_for_string():
+    result = _run('expect json $.active isBool', {"active": "true"})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
