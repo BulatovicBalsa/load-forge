@@ -110,6 +110,33 @@ def test_notEmpty_fails_for_empty_string():
     assert _failed(result)
 
 
+# ── isEmpty ───────────────────────────────────────────────────────────────────
+
+def test_isEmpty_passes_for_empty_list():
+    assert _passed(_run("expect json $.results isEmpty", {"results": []}))
+
+
+def test_isEmpty_passes_for_empty_string():
+    assert _passed(_run("expect json $.name isEmpty", {"name": ""}))
+
+
+def test_isEmpty_fails_for_non_empty_list():
+    result = _run("expect json $.results isEmpty", {"results": [1, 2]})
+    assert _failed(result)
+    assert any("empty" in e.lower() for e in _errors(result))
+
+
+def test_isEmpty_fails_for_non_empty_string():
+    result = _run("expect json $.name isEmpty", {"name": "hello"})
+    assert _failed(result)
+
+
+def test_isEmpty_fails_for_non_sized_type():
+    """isEmpty na broj treba baciti grešku jer int nije list/dict/str.""" #mozemo promijeniti
+    result = _run("expect json $.count isEmpty", {"count": 5})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
