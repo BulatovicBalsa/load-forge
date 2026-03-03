@@ -185,7 +185,7 @@ def test_bracket_notation_evaluates_correctly():
     sc = _get_scenario(result)
     assert sc.failed_requests == 0, (
         f"Bracket notation failed, jsonpath-ng may not support it. "
-        f"Error: {result.scenarios[0].error}"
+        f"Errors: {sc.errors}"
     )
 
 
@@ -206,6 +206,6 @@ def test_bracket_notation_with_dash_evaluates_correctly():
     )
     sc = _get_scenario(result)
     assert sc.failed_requests == 0, (
-        f"Bracket notation failed, jsonpath-ng may not support it. "
-        f"Error: {result.scenarios[0].error}"
+        f"Bracket notation with dash failed. "
+        f"Errors: {sc.errors}"
     )
