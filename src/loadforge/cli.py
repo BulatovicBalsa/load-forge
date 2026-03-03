@@ -1,3 +1,4 @@
+import argparse
 import sys
 import os
 from pathlib import Path
@@ -8,23 +9,32 @@ from .parser.parse import parse_file
 from .runtime.runner import run_test
 
 
-def parse_args() -> tuple[Path, Path | None]:
-    if len(sys.argv) not in (2, 3):
-        print("Usage: loadforge <file.lf> [env path]", file=sys.stderr)
-        raise SystemExit(2)
-    p = Path(sys.argv[1]).resolve()
+def parse_args() -> tuple[Path, Path | None, bool]:
+    parser = argparse.ArgumentParser(
+        prog="loadforge",
+        description="Run a LoadForge test file.",
+    )
+    parser.add_argument("file", help="Path to .lf file")
+    parser.add_argument("env", nargs="?", help="Optional path to .env file")
+    parser.add_argument(
+        "--control-stdin",
+        action="store_true",
+        help="Enable STOP control command via stdin pipe.",
+    )
+
+    args = parser.parse_args()
+
+    p = Path(args.file).resolve()
     if not p.exists():
-        print(f"File not found: {p}", file=sys.stderr)
-        raise SystemExit(2)
+        parser.error(f"File not found: {p}")
 
-    if len(sys.argv) == 3:
-        env = Path(sys.argv[2]).resolve()
+    env: Path | None = None
+    if args.env:
+        env = Path(args.env).resolve()
         if not env.exists():
-            print(f"Env file not found: {env}", file=sys.stderr)
-            raise SystemExit(2)
-        return p, env
+            parser.error(f"Env file not found: {env}")
 
-    return p, None
+    return p, env, args.control_stdin
 
 def force_utf8_stdio():
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -43,7 +53,7 @@ def force_utf8_stdio():
 
 def main() -> None:
     force_utf8_stdio()
-    file, env = parse_args()
+    file, env, control_stdin = parse_args()
     model = parse_file(file)
     if env is None:
         has_env_vars = bool(
@@ -57,7 +67,7 @@ def main() -> None:
         load_dotenv(dotenv_path=env, override=False)
 
     try:
-        result = run_test(model)
+        result = run_test(model, control_stdin=control_stdin)
         print(result)
     except KeyboardInterrupt:
         print("\033[93mTest interrupted by user.\033[0m")
