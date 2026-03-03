@@ -188,6 +188,28 @@ def test_isNull_fails_when_field_missing():
     assert _failed(result)
 
 
+# ── notNull ───────────────────────────────────────────────────────────────────
+
+def test_notNull_passes_when_field_has_value():
+    assert _passed(_run("expect json $.id notNull", {"id": 42}))
+
+
+def test_notNull_passes_for_zero():
+    """0 nije null, treba proći."""
+    assert _passed(_run("expect json $.count notNull", {"count": 0}))
+
+
+def test_notNull_passes_for_empty_string():
+    """Prazan string nije null,  treba proći."""
+    assert _passed(_run("expect json $.name notNull", {"name": ""}))
+
+
+def test_notNull_fails_when_field_is_null():
+    result = _run("expect json $.id notNull", {"id": None})
+    assert _failed(result)
+    assert any("null" in e.lower() for e in _errors(result))
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
