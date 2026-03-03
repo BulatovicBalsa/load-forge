@@ -227,6 +227,23 @@ def test_isObject_fails_for_string():
     assert _failed(result)
 
 
+# ── isString ──────────────────────────────────────────────────────────────────
+
+def test_isString_passes_for_string():
+    assert _passed(_run("expect json $.name isString", {"name": "hello"}))
+
+
+def test_isString_fails_for_number():
+    result = _run("expect json $.name isString", {"name": 42})
+    assert _failed(result)
+    assert any("string" in e.lower() for e in _errors(result))
+
+
+def test_isString_fails_for_bool():
+    result = _run("expect json $.name isString", {"name": True})
+    assert _failed(result)
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
