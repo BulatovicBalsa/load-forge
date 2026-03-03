@@ -36,6 +36,7 @@ class ScenarioSummary:
     latency_p95_ms: float
     latency_p99_ms: float
     requests_per_sec: float
+    errors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -160,6 +161,7 @@ class MetricsCollector:
         latencies = [r.latency_ms for r in records]
         lat_min, lat_max, lat_avg, p50, p95, p99 = _compute_latency_stats(latencies)
         rps = total / duration if duration > 0 else 0.0
+        errors = [r.error for r in records if r.error is not None]
 
         return ScenarioSummary(
             name=name,
@@ -174,6 +176,7 @@ class MetricsCollector:
             latency_p95_ms=p95,
             latency_p99_ms=p99,
             requests_per_sec=rps,
+            errors=errors,
         )
 
     def summary(self) -> MetricsSummary:

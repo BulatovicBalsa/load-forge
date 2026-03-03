@@ -1,7 +1,5 @@
-# src/loadforge/cli.py
-from __future__ import annotations
-
 import sys
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,8 +26,23 @@ def parse_args() -> tuple[Path, Path | None]:
 
     return p, None
 
+def force_utf8_stdio():
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    os.environ.setdefault("PYTHONUTF8", "1")
+
+    # noinspection PyBroadException
+    try:
+        # Python 3.7+
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def main() -> None:
+    force_utf8_stdio()
     file, env = parse_args()
     model = parse_file(file)
     if env is None:
@@ -42,8 +55,12 @@ def main() -> None:
             )
     else:
         load_dotenv(dotenv_path=env, override=False)
-    result = run_test(model)
-    print(result)
+
+    try:
+        result = run_test(model)
+        print(result)
+    except KeyboardInterrupt:
+        print("\033[93mTest interrupted by user.\033[0m")
 
 
 if __name__ == "__main__":

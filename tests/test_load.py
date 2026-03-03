@@ -83,7 +83,7 @@ test "t" {
   scenario "s" {
     request GET "/x"
     expect status 200
-    expect json "$.items" isArray
+    expect json $.items isArray
   }
 }
 '''

@@ -9,10 +9,10 @@ from loadforge.runtime.runner import run_test
 @pytest.mark.parametrize(
     "check_snippet, expected_kind",
     [
-        ('expect json "$.results" isArray', JsonCheckKind.isArray),
-        ('expect json "$.results" notEmpty', JsonCheckKind.notEmpty),
-        ('expect json "$.token" equals "abc"', JsonCheckKind.equals),
-        ('expect json "$.results" hasSize 2', JsonCheckKind.hasSize),
+        ('expect json $.results isArray', JsonCheckKind.isArray),
+        ('expect json $.results notEmpty', JsonCheckKind.notEmpty),
+        ('expect json $.token equals "abc"', JsonCheckKind.equals),
+        ('expect json $.results hasSize 2', JsonCheckKind.hasSize),
     ],
 )
 def test_each_json_check_kind_is_converted(check_snippet, expected_kind):
@@ -41,7 +41,7 @@ def test_expect_json_isarray_passes_with_array():
       scenario "s" {
         request GET "/x"
         expect status 200
-        expect json "$.results" isArray
+        expect json $.results isArray
       }
     }
     '''
@@ -68,7 +68,7 @@ def test_expect_json_has_size_fails_when_size_differs():
       scenario "s" {
         request GET "/x"
         expect status 200
-        expect json "$.results" hasSize 2
+        expect json $.results hasSize 2
       }
     }
     '''
