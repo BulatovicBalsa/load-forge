@@ -32,6 +32,18 @@ def _ok_transport(json_body: dict):
     return httpx.MockTransport(handler)
 
 
+def _get_scenario(result, name: str = "s"):
+    match = next(
+        (sc for sc in result.summary.scenarios if sc.name == name),
+        None,
+    )
+    assert match is not None, (
+        f"Scenario '{name}' not found. "
+        f"Available: {[sc.name for sc in result.summary.scenarios]}"
+    )
+    return match
+
+
 @pytest.mark.parametrize("path", [
     '$.results',
     '$.results[0].name',
@@ -73,8 +85,8 @@ def test_bare_dollar_is_rejected():
 
 @pytest.mark.parametrize("path,expected", [
     ("$.results[0].name", "$.results[0].name"),
-    ("$['results']",      "$['results']"),
-    ("$['some-key']",     "$['some-key']"),
+    ("$['results']", "$['results']"),
+    ("$['some-key']", "$['some-key']"),
 ])
 def test_json_path_stored_correctly_on_model(path, expected):
     model = parse_str(_dsl_with_path(path))
@@ -95,8 +107,8 @@ def test_valid_path_evaluates_array_successfully():
     }
     ''')
     result = run_test(model, transport=_ok_transport({"results": [1, 2, 3]}))
-    assert result.failed == 0
-    assert result.scenarios[0].success is True
+    assert result.summary.failed_requests == 0
+    assert _get_scenario(result).failed_requests == 0
 
 
 def test_valid_nested_path_equals_value():
@@ -114,7 +126,7 @@ def test_valid_nested_path_equals_value():
         model,
         transport=_ok_transport({"results": [{"name": "iPhone 14"}]})
     )
-    assert result.failed == 0
+    assert result.summary.failed_requests == 0
 
 
 def test_valid_path_but_wrong_value_fails():
@@ -132,10 +144,9 @@ def test_valid_path_but_wrong_value_fails():
         model,
         transport=_ok_transport({"results": [{"name": "iPhone 14"}]})
     )
-    assert result.failed == 1
-    assert result.scenarios[0].success is False
-    error = result.scenarios[0].error or ""
-    assert "mismatch" in error.lower()
+    sc = _get_scenario(result)
+    assert sc.failed_requests > 0
+    assert any("mismatch" in e.lower() for e in sc.errors)
 
 
 def test_path_not_found_in_response_fails():
@@ -153,8 +164,7 @@ def test_path_not_found_in_response_fails():
         model,
         transport=_ok_transport({"results": [1, 2, 3]})
     )
-    assert result.failed == 1
-    assert result.scenarios[0].success is False
+    assert _get_scenario(result).failed_requests > 0
 
 
 def test_bracket_notation_evaluates_correctly():
@@ -172,8 +182,8 @@ def test_bracket_notation_evaluates_correctly():
         model,
         transport=_ok_transport({"results": [1, 2, 3]})
     )
-    assert result.failed == 0
-    assert result.scenarios[0].success is True, (
+    sc = _get_scenario(result)
+    assert sc.failed_requests == 0, (
         f"Bracket notation failed, jsonpath-ng may not support it. "
         f"Error: {result.scenarios[0].error}"
     )
@@ -194,8 +204,8 @@ def test_bracket_notation_with_dash_evaluates_correctly():
         model,
         transport=_ok_transport({"some-key": [1, 2, 3]})
     )
-    assert result.failed == 0
-    assert result.scenarios[0].success is True, (
+    sc = _get_scenario(result)
+    assert sc.failed_requests == 0, (
         f"Bracket notation failed, jsonpath-ng may not support it. "
         f"Error: {result.scenarios[0].error}"
     )
