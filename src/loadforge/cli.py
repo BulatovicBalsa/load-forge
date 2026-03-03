@@ -1,15 +1,27 @@
 import argparse
-import sys
 import os
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from dotenv import load_dotenv
+
+from loadforge.model import TestFile
 
 from .parser.parse import parse_file
 from .runtime.runner import run_test
 
 
-def parse_args() -> tuple[Path, Path | None, bool]:
+@dataclass(frozen=True)
+class CliOptions:
+    file: Path
+    env: Path | None
+    control_stdin: bool
+    env_needed: bool
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="loadforge",
         description="Run a LoadForge test file.",
@@ -21,12 +33,21 @@ def parse_args() -> tuple[Path, Path | None, bool]:
         action="store_true",
         help="Enable STOP control command via stdin pipe.",
     )
+    parser.add_argument(
+        "--env-needed",
+        action="store_true",
+        help="Returns true if environment variables are declared in the .lf file, false otherwise.",
+    )
+    return parser
 
-    args = parser.parse_args()
 
-    p = Path(args.file).resolve()
-    if not p.exists():
-        parser.error(f"File not found: {p}")
+def parse_args(argv: Sequence[str] | None = None) -> CliOptions:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    file_path = Path(args.file).resolve()
+    if not file_path.exists():
+        parser.error(f"File not found: {file_path}")
 
     env: Path | None = None
     if args.env:
@@ -34,9 +55,15 @@ def parse_args() -> tuple[Path, Path | None, bool]:
         if not env.exists():
             parser.error(f"Env file not found: {env}")
 
-    return p, env, args.control_stdin
+    return CliOptions(
+        file=file_path,
+        env=env,
+        control_stdin=args.control_stdin,
+        env_needed=args.env_needed,
+    )
 
-def force_utf8_stdio():
+
+def force_utf8_stdio() -> None:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     os.environ.setdefault("PYTHONUTF8", "1")
 
@@ -51,27 +78,49 @@ def force_utf8_stdio():
         pass
 
 
-def main() -> None:
-    force_utf8_stdio()
-    file, env, control_stdin = parse_args()
-    model = parse_file(file)
+def is_env_needed(model: TestFile) -> bool:
+    return bool(
+        model.test and model.test.environment and model.test.environment.envVars
+    )
+
+
+def _print_env_needed(model: TestFile) -> int:
+    print("true" if is_env_needed(model) else "false")
+    return 0
+
+
+def _prepare_environment(model: TestFile, env: Path | None) -> None:
     if env is None:
-        has_env_vars = bool(
-            model.test and model.test.environment and model.test.environment.envVars
-        )
-        if has_env_vars:
+        if is_env_needed(model):
             raise RuntimeError(
                 "Environment variables are declared in the .lf file, but no env file path was provided."
             )
-    else:
-        load_dotenv(dotenv_path=env, override=False)
+        return
 
+    load_dotenv(dotenv_path=env, override=False)
+
+
+def _run_and_print(model: TestFile, *, control_stdin: bool) -> int:
     try:
         result = run_test(model, control_stdin=control_stdin)
         print(result)
+        return 0
     except KeyboardInterrupt:
         print("\033[93mTest interrupted by user.\033[0m")
+        return 130
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_stdio()
+    options = parse_args(argv)
+    model = parse_file(options.file)
+
+    if options.env_needed:
+        return _print_env_needed(model)
+
+    _prepare_environment(model, options.env)
+    return _run_and_print(model, control_stdin=options.control_stdin)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
