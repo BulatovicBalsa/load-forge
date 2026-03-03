@@ -244,6 +244,29 @@ def test_isString_fails_for_bool():
     assert _failed(result)
 
 
+# ── isNumber ──────────────────────────────────────────────────────────────────
+
+def test_isNumber_passes_for_int():
+    assert _passed(_run("expect json $.count isNumber", {"count": 42}))
+
+
+def test_isNumber_passes_for_float():
+    assert _passed(_run("expect json $.price isNumber", {"price": 9.99}))
+
+
+def test_isNumber_fails_for_string():
+    result = _run("expect json $.count isNumber", {"count": "42"})
+    assert _failed(result)
+    assert any("number" in e.lower() for e in _errors(result))
+
+
+def test_isNumber_fails_for_bool():
+    """bool je subclass int u Python, mora biti eksplicitno odbijen."""
+    result = _run("expect json $.active isNumber", {"active": True})
+    assert _failed(result)
+    assert any("number" in e.lower() for e in _errors(result))
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
