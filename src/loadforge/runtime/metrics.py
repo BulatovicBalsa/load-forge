@@ -109,10 +109,25 @@ class MetricsCollector:
         self._records: list[RequestRecord] = []
         self._start_time: float = 0.0
         self._end_time: float = 0.0
+        self._interrupted: bool = False
+        self._stop_reason: Optional[str] = None
 
     @property
     def records(self) -> list[RequestRecord]:
         return self._records
+
+    @property
+    def interrupted(self) -> bool:
+        return self._interrupted
+
+    @property
+    def stop_reason(self) -> Optional[str]:
+        return self._stop_reason
+
+    def mark_interrupted(self, reason: Optional[str] = None) -> None:
+        self._interrupted = True
+        if reason and self._stop_reason is None:
+            self._stop_reason = reason
 
     def start(self) -> None:
         """Mark the beginning of the load test."""

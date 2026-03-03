@@ -31,9 +31,13 @@ class LoadTestResult:
     summary: MetricsSummary
     auth_success: Optional[bool] = None
     auth_error: Optional[str] = None
+    interrupted: bool = False
+    stop_reason: Optional[str] = None
 
     @property
     def success(self) -> bool:
+        if self.interrupted:
+            return False
         if self.auth_success is False:
             return False
         return self.summary.error_rate == 0.0
@@ -69,6 +73,16 @@ class LoadTestResult:
             lines.append(f"  {Color.YELLOW}{self.auth_error}{Color.RESET}")
         lines.append("")
         return lines
+
+    def _render_interrupted(self) -> list[str]:
+        if not self.interrupted:
+            return []
+        suffix = f" ({self.stop_reason})" if self.stop_reason else ""
+        return [
+            f"{Color.BOLD}{Color.YELLOW}Stopped early{Color.RESET}{suffix}",
+            f"{Color.DIM}Showing partial metrics collected so far.{Color.RESET}",
+            "",
+        ]
 
     def _render_throughput(self) -> list[str]:
         s = self.summary
@@ -130,6 +144,8 @@ class LoadTestResult:
         return lines
 
     def _render_result_line(self) -> list[str]:
+        if self.interrupted:
+            return [f"{Color.BOLD}{Color.YELLOW}Result: STOPPED{Color.RESET}"]
         if self.summary.failed_requests == 0 and self.auth_success is not False:
             return [f"{Color.BOLD}{Color.GREEN}Result: PASS{Color.RESET}"]
         else:
@@ -139,6 +155,7 @@ class LoadTestResult:
         parts: list[str] = []
         parts += self._render_header()
         parts += self._render_auth()
+        parts += self._render_interrupted()
         parts += self._render_throughput()
         parts += self._render_latency()
         parts += self._render_errors()

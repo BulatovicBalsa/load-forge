@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 import sys
 import time
 from typing import Any, Optional
@@ -17,6 +18,11 @@ from loadforge.model import (
     Test,
 )
 from loadforge.runtime.context import resolve_value_or_ref
+from loadforge.runtime.control import (
+    drain_virtual_users,
+    start_stdin_control_listener,
+    wait_for_stop_or_timeout,
+)
 from loadforge.runtime.interpolate import interpolate
 from loadforge.runtime.metrics import MetricsCollector
 
@@ -270,6 +276,8 @@ async def _virtual_user(
     """
     if single_pass:
         for scenario in scenarios:
+            if stop_event.is_set():
+                return
             await run_scenario_async(client, scenario, ctx, metrics)
         return
 
@@ -297,6 +305,7 @@ async def run_load_test_async(
     ramp_up_seconds: float = 0.0,
     duration_seconds: float = 0.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
+    control_stdin: bool = False,
 ) -> MetricsCollector:
     """
     Run the load test for the given *test*.
@@ -318,6 +327,14 @@ async def run_load_test_async(
 
     metrics = MetricsCollector()
     stop_event = asyncio.Event()
+    stop_reason: Optional[str] = None
+
+    def _request_stop(reason: str) -> None:
+        nonlocal stop_reason
+        if stop_reason is None:
+            stop_reason = reason
+        metrics.mark_interrupted(reason=stop_reason)
+        stop_event.set()
 
     client_kwargs: dict = {"base_url": base_url}
     if transport is not None:
@@ -329,11 +346,29 @@ async def run_load_test_async(
 
         metrics.start()
         progress: Optional[_ProgressDisplay] = None
-        try:
-            tasks: list[asyncio.Task] = []
+        tasks: list[asyncio.Task] = []
 
+        loop = asyncio.get_running_loop()
+        handled_signals: list[int] = []
+        if hasattr(loop, "add_signal_handler"):
+            try:
+                loop.add_signal_handler(signal.SIGTERM, _request_stop, "SIGTERM")
+                handled_signals.append(signal.SIGTERM)
+            except (NotImplementedError, RuntimeError, ValueError):
+                pass
+
+        start_stdin_control_listener(
+            loop=loop,
+            enabled=control_stdin,
+            request_stop=_request_stop,
+        )
+
+        try:
             # Spawn virtual users (with optional ramp-up delay).
             for i in range(num_users):
+                if stop_event.is_set():
+                    break
+
                 task = asyncio.create_task(
                     _virtual_user(
                         i, client, test.scenarios, ctx, metrics, stop_event,
@@ -351,24 +386,35 @@ async def run_load_test_async(
                     progress.start()
 
                 if delay_between_users > 0 and i < num_users - 1:
-                    await asyncio.sleep(delay_between_users)
+                    stop_requested = await wait_for_stop_or_timeout(
+                        stop_event, delay_between_users
+                    )
+                    if stop_requested:
+                        break
 
             if single_pass:
-                await asyncio.gather(*tasks, return_exceptions=True)
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 elapsed_so_far = metrics.elapsed_seconds
                 remaining = duration_seconds - elapsed_so_far
                 if remaining > 0:
-                    await asyncio.sleep(remaining)
+                    timed_out = not await wait_for_stop_or_timeout(
+                        stop_event, remaining
+                    )
+                    if timed_out:
+                        stop_event.set()
+                else:
+                    stop_event.set()
 
-                stop_event.set()
-
-                done, pending = await asyncio.wait(tasks, timeout=30.0)
-                for t in pending:
-                    t.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
+                await drain_virtual_users(tasks, stop_event, timeout=30.0)
+        except asyncio.CancelledError:
+            # Ctrl+C (SIGINT) reaches us as cancellation via asyncio.run().
+            _request_stop("SIGINT")
+            await drain_virtual_users(tasks, stop_event, timeout=30.0)
         finally:
+            for sig in handled_signals:
+                loop.remove_signal_handler(sig)
             if progress is not None:
                 await progress.stop()
             metrics.stop()
