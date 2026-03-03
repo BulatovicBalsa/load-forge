@@ -137,6 +137,18 @@ def test_isEmpty_fails_for_non_sized_type():
     assert _failed(result)
 
 
+# ── equals ────────────────────────────────────────────────────────────────────
+
+def test_equals_passes_for_matching_string():
+    assert _passed(_run('expect json $.name equals "iPhone 14"', {"name": "iPhone 14"}))
+
+
+def test_equals_fails_for_different_value():
+    result = _run('expect json $.name equals "Galaxy"', {"name": "iPhone 14"})
+    assert _failed(result)
+    assert any("mismatch" in e.lower() for e in _errors(result))
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
