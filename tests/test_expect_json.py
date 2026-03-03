@@ -13,7 +13,6 @@ from loadforge.runtime.runner import run_test
 def _make_transport(json_body: dict, status: int = 200):
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json=json_body)
-
     return httpx.MockTransport(handler)
 
 
@@ -50,19 +49,19 @@ def _errors(result):
 # ── parametrize: grammar parses all kinds ────────────────────────────────────
 
 @pytest.mark.parametrize("check_snippet, expected_kind", [
-    ('expect json $.results isArray', JsonCheckKind.isArray),
-    ('expect json $.results notEmpty', JsonCheckKind.notEmpty),
-    ('expect json $.results isEmpty', JsonCheckKind.isEmpty),
-    ('expect json $.token equals "abc"', JsonCheckKind.equals),
-    ('expect json $.results hasSize 2', JsonCheckKind.hasSize),
-    ('expect json $.deleted_at isNull', JsonCheckKind.isNull),
-    ('expect json $.id notNull', JsonCheckKind.notNull),
-    ('expect json $.user isObject', JsonCheckKind.isObject),
-    ('expect json $.name isString', JsonCheckKind.isString),
-    ('expect json $.count isNumber', JsonCheckKind.isNumber),
-    ('expect json $.active isBool', JsonCheckKind.isBool),
-    ('expect json $.tags contains "python"', JsonCheckKind.contains),
-    ('expect json $.email matches "[^@]+"', JsonCheckKind.matches),
+    ('expect json $.results isArray',          JsonCheckKind.isArray),
+    ('expect json $.results notEmpty',         JsonCheckKind.notEmpty),
+    ('expect json $.results isEmpty',          JsonCheckKind.isEmpty),
+    ('expect json $.token equals "abc"',       JsonCheckKind.equals),
+    ('expect json $.results hasSize 2',        JsonCheckKind.hasSize),
+    ('expect json $.deleted_at isNull',        JsonCheckKind.isNull),
+    ('expect json $.id notNull',               JsonCheckKind.notNull),
+    ('expect json $.user isObject',            JsonCheckKind.isObject),
+    ('expect json $.name isString',            JsonCheckKind.isString),
+    ('expect json $.count isNumber',           JsonCheckKind.isNumber),
+    ('expect json $.active isBool',            JsonCheckKind.isBool),
+    ('expect json $.tags contains "python"',   JsonCheckKind.contains),
+    ('expect json $.email matches "[^@]+"',    JsonCheckKind.matches),
 ])
 def test_each_json_check_kind_is_parsed(check_snippet, expected_kind):
     model = parse_str(_dsl(check_snippet))
@@ -88,6 +87,26 @@ def test_isArray_fails_for_object():
 
 def test_isArray_fails_for_string():
     result = _run("expect json $.results isArray", {"results": "hello"})
+    assert _failed(result)
+
+
+# ── notEmpty ──────────────────────────────────────────────────────────────────
+
+def test_notEmpty_passes_for_non_empty_list():
+    assert _passed(_run("expect json $.results notEmpty", {"results": [1]}))
+
+
+def test_notEmpty_passes_for_non_empty_string():
+    assert _passed(_run("expect json $.name notEmpty", {"name": "hello"}))
+
+
+def test_notEmpty_fails_for_empty_list():
+    result = _run("expect json $.results notEmpty", {"results": []})
+    assert _failed(result)
+
+
+def test_notEmpty_fails_for_empty_string():
+    result = _run("expect json $.name notEmpty", {"name": ""})
     assert _failed(result)
 
 
