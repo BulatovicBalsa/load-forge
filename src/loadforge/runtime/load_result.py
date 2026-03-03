@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from loadforge.runtime.metrics import MetricsSummary
@@ -33,12 +33,16 @@ class LoadTestResult:
     auth_error: Optional[str] = None
     interrupted: bool = False
     stop_reason: Optional[str] = None
+    metric_threshold_checks: int = 0
+    metric_threshold_failures: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
         if self.interrupted:
             return False
         if self.auth_success is False:
+            return False
+        if self.metric_threshold_failures:
             return False
         return self.summary.error_rate == 0.0
 
@@ -143,10 +147,29 @@ class LoadTestResult:
         lines.append("")
         return lines
 
+    def _render_metric_thresholds(self) -> list[str]:
+        if self.metric_threshold_checks <= 0:
+            return []
+
+        if self.metric_threshold_failures:
+            status = f"{Color.RED}✘ FAIL{Color.RESET}"
+        else:
+            status = f"{Color.GREEN}✔ PASS{Color.RESET}"
+
+        lines = [
+            f"{Color.BOLD}Metric thresholds:{Color.RESET}  {status}",
+        ]
+
+        for failure in self.metric_threshold_failures:
+            lines.append(f"  {Color.RED}{failure}{Color.RESET}")
+
+        lines.append("")
+        return lines
+
     def _render_result_line(self) -> list[str]:
         if self.interrupted:
             return [f"{Color.BOLD}{Color.YELLOW}Result: STOPPED{Color.RESET}"]
-        if self.summary.failed_requests == 0 and self.auth_success is not False:
+        if self.success:
             return [f"{Color.BOLD}{Color.GREEN}Result: PASS{Color.RESET}"]
         else:
             return [f"{Color.BOLD}{Color.RED}Result: FAIL{Color.RESET}"]
@@ -160,5 +183,6 @@ class LoadTestResult:
         parts += self._render_latency()
         parts += self._render_errors()
         parts += self._render_scenario_table()
+        parts += self._render_metric_thresholds()
         parts += self._render_result_line()
         return "\n".join(parts)

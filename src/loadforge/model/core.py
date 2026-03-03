@@ -4,6 +4,7 @@ from typing import Optional
 from loadforge.model.auth import AuthLogin
 from loadforge.model.base import TxNode
 from loadforge.model.load import Load
+from loadforge.model.quality import MetricsBlock
 from loadforge.model.scenario import Scenario
 from loadforge.model.values import VariablesBlock, Ref
 
@@ -39,6 +40,7 @@ class Test(TxNode):
     variables: Optional[VariablesBlock] = None
     scenarios: list[Scenario] = field(default_factory=list)
     auth: Optional[AuthLogin] = None
+    metrics: Optional[MetricsBlock] = None
 
 
 @dataclass

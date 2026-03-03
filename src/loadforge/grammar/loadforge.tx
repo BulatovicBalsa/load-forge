@@ -10,6 +10,7 @@ Test:
         (variables=VariablesBlock)?
         scenarios*=Scenario
         (load=Load)?
+        (metrics=MetricsBlock)?
     '}'
 ;
 
@@ -117,4 +118,31 @@ Duration:
     (hours=INT 'h')?
     (minutes=INT 'm')?
     (seconds=INT 's')?
+;
+
+MetricsBlock:
+    'metrics' '{'
+        checks*=MetricExpectation
+    '}'
+;
+
+MetricExpectation:
+      metric=LatencyMetric op=MetricOperator value=MetricNumber unit=LatencyUnit
+    | metric='errorRate' op=MetricOperator value=MetricNumber unit='%'
+;
+
+LatencyMetric:
+    'p50' | 'p95' | 'p99' | 'avg' | 'min' | 'max'
+;
+
+LatencyUnit:
+    'us' | 'ms' | 's'
+;
+
+MetricOperator:
+    '<=' | '<' | '>=' | '>'
+;
+
+MetricNumber:
+    /[0-9]+(\.[0-9]+)?/
 ;

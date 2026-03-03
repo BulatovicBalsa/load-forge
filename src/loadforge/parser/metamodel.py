@@ -1,7 +1,8 @@
 from pathlib import Path
 from textx import metamodel_from_file
 from loadforge.model import ExpectStatus, Scenario, ValueOrRef, VarEntry, VariablesBlock, Target, Ref, EnvCall, EnvVar, \
-    Test, TestFile, Environment, Load, Request, Duration, AuthLogin, BodyBlock, BodyField, ExpectJson, JsonCheck
+    Test, TestFile, Environment, Load, Request, Duration, AuthLogin, BodyBlock, BodyField, ExpectJson, JsonCheck, \
+    MetricsBlock, MetricExpectation
 from loadforge.parser.preprocessors import convert_json_check_kind_to_enum
 
 HERE = Path(__file__).resolve().parent.parent
@@ -17,6 +18,7 @@ def build_metamodel():
             VariablesBlock, VarEntry, ValueOrRef,
             Scenario, Request, ExpectStatus, ExpectJson, JsonCheck,
             Load, Duration,
+            MetricsBlock, MetricExpectation,
             AuthLogin, BodyBlock, BodyField,
         ],
     )

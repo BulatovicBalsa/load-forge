@@ -14,6 +14,7 @@ from .context import (
 )
 from .load_executor import run_load_test_async
 from .load_result import LoadTestResult
+from .metric_thresholds import evaluate_metric_thresholds
 from .metrics import MetricsSummary
 from .timing import timed
 from ..model import TestFile
@@ -145,6 +146,8 @@ def run_test(
             auth_error=auth_error,
             interrupted=False,
             stop_reason=None,
+            metric_threshold_checks=0,
+            metric_threshold_failures=[],
         )
 
     # Run the load test (or single-pass functional test).
@@ -162,6 +165,12 @@ def run_test(
     )
 
     summary = metrics.summary()
+    metric_threshold_checks = len(t.metrics.checks) if t.metrics is not None else 0
+    metric_threshold_failures = (
+        evaluate_metric_thresholds(t.metrics, summary)
+        if not metrics.interrupted
+        else []
+    )
 
     return LoadTestResult(
         test_name=t.name.strip().strip('"'),
@@ -173,4 +182,6 @@ def run_test(
         auth_error=auth_error,
         interrupted=metrics.interrupted,
         stop_reason=metrics.stop_reason,
+        metric_threshold_checks=metric_threshold_checks,
+        metric_threshold_failures=metric_threshold_failures,
     )
