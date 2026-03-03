@@ -19,6 +19,7 @@ class CliOptions:
     env: Path | None
     control_stdin: bool
     env_needed: bool
+    return_name: bool
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -37,6 +38,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--env-needed",
         action="store_true",
         help="Returns true if environment variables are declared in the .lf file, false otherwise.",
+    )
+    parser.add_argument(
+        "--name",
+        action="store_true",
+        help="Returns the test name declared in the .lf file.",
     )
     return parser
 
@@ -60,6 +66,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliOptions:
         env=env,
         control_stdin=args.control_stdin,
         env_needed=args.env_needed,
+        return_name=args.name,
     )
 
 
@@ -86,6 +93,12 @@ def is_env_needed(model: TestFile) -> bool:
 
 def _print_env_needed(model: TestFile) -> int:
     print("true" if is_env_needed(model) else "false")
+    return 0
+
+
+def _print_test_name(model: TestFile) -> int:
+    if model.test and model.test.name:
+        print(model.test.name)
     return 0
 
 
@@ -117,6 +130,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if options.env_needed:
         return _print_env_needed(model)
+
+    if options.return_name:
+        return _print_test_name(model)
 
     _prepare_environment(model, options.env)
     return _run_and_print(model, control_stdin=options.control_stdin)
