@@ -1,0 +1,21 @@
+scenario "verify user response" {
+    request GET "/users/1"
+    expect status 200
+    expect json $.id notNull
+    expect json $.name isString
+    expect json $.age isNumber
+    expect json $.is_active isBool
+    expect json $.address isObject
+    expect json $.tags isArray
+    expect json $.tags notEmpty
+    expect json $.tags contains "python"
+    expect json $.deleted_at isNull
+    expect json $.email matches "[^@]+@[^@]+"
+}
+
+scenario "verify empty results" {
+    request GET "/users?q=nonexistent"
+    expect status 200
+    expect json $.results isArray
+    expect json $.results isEmpty
+}
