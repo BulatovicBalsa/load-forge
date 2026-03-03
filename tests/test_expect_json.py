@@ -317,6 +317,30 @@ def test_contains_fails_for_non_list_non_string():
     assert any("requires list or string" in e.lower() for e in _errors(result))
 
 
+# ── matches ───────────────────────────────────────────────────────────────────
+
+def test_matches_passes_for_valid_pattern():
+    assert _passed(_run(
+        'expect json $.email matches "[^@]+@[^@]+"',
+        {"email": "user@example.com"}
+    ))
+
+
+def test_matches_fails_when_pattern_not_matched():
+    result = _run(
+        'expect json $.email matches "[^@]+@[^@]+"',
+        {"email": "not-an-email"}
+    )
+    assert _failed(result)
+    assert any("match" in e.lower() for e in _errors(result))
+
+
+def test_matches_fails_for_non_string():
+    result = _run('expect json $.id matches "[0-9]+"', {"id": 123})
+    assert _failed(result)
+    assert any("requires string" in e.lower() for e in _errors(result))
+
+
 def test_expect_json_isarray_passes_with_array():
     model = parse_str(r'''
     test "t" {
