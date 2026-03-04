@@ -18,7 +18,7 @@ def run_auth_login(client: httpx.Client, auth: AuthLogin, ctx: dict[str, str]) -
         raise RuntimeError("auth.login missing body")
 
     endpoint = resolve_value_or_ref(auth.endpoint, ctx)
-    method = auth.method
+    method = auth.method.value
 
     payload: dict[str, Any] = {}
     for f in auth.body.fields:

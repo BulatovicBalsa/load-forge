@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from loadforge.model.base import TxNode
+from loadforge.model.scenario import HttpMethod
 from loadforge.model.values import ValueOrRef
 
 
@@ -19,6 +20,6 @@ class BodyBlock(TxNode):
 @dataclass
 class AuthLogin(TxNode):
     endpoint: Optional["ValueOrRef"] = None
-    method: str = ""
+    method: HttpMethod = HttpMethod.POST
     body: Optional[BodyBlock] = None
     format: str = ""
