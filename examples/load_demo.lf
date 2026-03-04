@@ -1,12 +1,16 @@
-test "Load Test Demo" {
+test "Load Smoke Demo" {
   environment {
     baseUrl = env("BASE_URL")
   }
 
   target #baseUrl
 
+  variables {
+    homePath = "/"
+  }
+
   scenario "fetch index" {
-    request GET "/"
+    request GET "${homePath}"
     expect status 200
   }
 

@@ -191,4 +191,5 @@ Runtime flow:
 ## Next
 
 - For setup, commands, testing, and debugging see [development.md](development.md).
-- DSL examples are in `examples/`.
+- DSL examples are in `examples/` (see `examples/README.md`).
+- Use `examples/.env.example` as a template for `examples/.env`.

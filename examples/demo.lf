@@ -1,17 +1,19 @@
-test "Hello DSL" {
+test "Catalog Search - Full Demo" {
   environment {
     baseUrl = env("BASE_URL")
-    token   = env("TOKEN")
+    authEndpoint = env("AUTH_ENDPOINT")
+    username = env("USERNAME")
+    password = env("PASSWORD")
   }
 
   target #baseUrl
 
   auth login {
-    endpoint "/auth/login"
+    endpoint #authEndpoint
     method POST
     body {
-      username = "admin"
-      password = "admin"
+      username = #username
+      password = #password
     }
     format "$.access_token"
   }
@@ -19,15 +21,15 @@ test "Hello DSL" {
   variables {
     q = "phone"
     q2 = "laptop"
+    expectedName = "iPhone 14"
   }
 
   scenario "search" {
     request GET "/catalog/search?q=${q}"
     expect status 200
     expect json $.results isArray
-    expect json $.results[0].name equals "iPhone 14"
-    expect json $.data.items[*] notEmpty
-    expect json $.count hasSize 3
+    expect json $.results[0].name equals #expectedName
+    expect json $.results notEmpty
   }
 
   scenario "search again" {
@@ -37,7 +39,12 @@ test "Hello DSL" {
 
   load {
     users 10
-    rampUp 10s
-    duration 1m
+    rampUp 5s
+    duration 30s
+  }
+
+  metrics {
+    p95 < 500ms
+    errorRate < 2%
   }
 }

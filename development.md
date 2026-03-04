@@ -54,13 +54,13 @@ Examples:
 
 ```bash
 # Run a test
-uv run loadforge examples/simple/load_demo.lf examples/simple/.env
+uv run loadforge examples/load_demo.lf examples/.env
 
 # Check whether file requires environment block
-uv run loadforge examples/simple/demo.lf --env-needed
+uv run loadforge examples/demo.lf --env-needed
 
 # Print declared test name
-uv run loadforge examples/simple/demo.lf --name
+uv run loadforge examples/demo.lf --name
 ```
 
 Notes:
@@ -77,7 +77,7 @@ When enabled, runtime listens on stdin pipe and reacts to `STOP`.
 Example:
 
 ```bash
-printf "STOP\n" | uv run loadforge examples/simple/load_demo.lf examples/simple/.env --control-stdin
+printf "STOP\n" | uv run loadforge examples/load_demo.lf examples/.env --control-stdin
 ```
 
 ## 5. Testing
@@ -110,7 +110,7 @@ Simple smoke test:
 python -m http.server 9999
 
 # Terminal 2
-cd examples/simple
+cd examples
 uv run loadforge functional_demo.lf .env
 ```
 
@@ -119,7 +119,7 @@ uv run loadforge functional_demo.lf .env
 Recommended run configuration:
 
 - Module name: `loadforge.cli`
-- Working directory: `.../load-forge/examples/simple`
+- Working directory: `.../load-forge/examples`
 - Parameters: `demo.lf .env`
 - Python interpreter: project/venv interpreter
 
