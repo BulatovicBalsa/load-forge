@@ -188,6 +188,48 @@ Runtime flow:
 6. `expect` steps validate the last response; failures mark the last request as failed.
 7. Runtime builds final report (`LoadTestResult`) with throughput, latency, errors, and per-scenario stats.
 
+## CLI Output Examples
+
+### While test is running (live progress line)
+
+In load mode, CLI renders a single updating line with elapsed time, active users, request count, throughput, and errors:
+
+```text
+⠹   6.0s / 30s │ Users: 10/10 │ Reqs: 666 │ Req/s: 107.3 │ Errors: 0
+```
+
+This line refreshes in place until the test ends or is stopped.
+
+### Final report (after completion)
+
+After execution, CLI prints a report like:
+
+```text
+LoadForge Load Test Report
+Test: Load + Metrics Demo
+Duration: 10.0s | Users: 10 | Ramp-up: 3s
+
+Throughput:
+  Total requests: 10,545
+  Requests/sec:   1053.7
+
+Latency (ms):
+  Min: 0.8      Avg: 8.0      p50: 3.9
+  p95: 12.9     p99: 18.0     Max: 2959.9
+
+Errors:
+  Error rate: 0.0% (0/10,545)
+
+Per-scenario breakdown:
+  fetch index  reqs: 10,545  rps: 1053.7  p95: 12.9ms  err: 0.0%
+
+Metric thresholds:  PASS
+
+Result: PASS
+```
+
+If stopped early, report includes `Stopped early` and still shows partial metrics collected so far.
+
 ## Next
 
 - For setup, commands, testing, and debugging see [development.md](development.md).
