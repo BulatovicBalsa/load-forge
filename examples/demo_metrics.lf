@@ -1,4 +1,4 @@
-test "Load Test Demo" {
+test "Load + Metrics Demo" {
   environment {
     baseUrl = env("BASE_URL")
   }
@@ -11,8 +11,13 @@ test "Load Test Demo" {
   }
 
   load {
-    users 5
-    rampUp 2s
-    duration 5s
+    users 10
+    rampUp 3s
+    duration 10s
+  }
+
+  metrics {
+    p95 < 2s
+    errorRate < 1%
   }
 }

@@ -1,4 +1,4 @@
-test "Functional Test Demo" {
+test "Functional Smoke Demo" {
   environment {
     baseUrl = env("BASE_URL")
   }

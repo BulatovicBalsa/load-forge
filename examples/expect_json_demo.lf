@@ -1,4 +1,11 @@
-scenario "verify user response" {
+test "JSON Assertions Demo" {
+  environment {
+    baseUrl = env("BASE_URL")
+  }
+
+  target #baseUrl
+
+  scenario "verify user response" {
     request GET "/users/1"
     expect status 200
     expect json $.id notNull
@@ -11,11 +18,13 @@ scenario "verify user response" {
     expect json $.tags contains "python"
     expect json $.deleted_at isNull
     expect json $.email matches "[^@]+@[^@]+"
-}
+  }
 
-scenario "verify empty results" {
+  scenario "verify empty results" {
     request GET "/users?q=nonexistent"
     expect status 200
     expect json $.results isArray
     expect json $.results isEmpty
+    expect json $.results hasSize 0
+  }
 }
