@@ -193,3 +193,13 @@ Runtime flow:
 - For setup, commands, testing, and debugging see [development.md](development.md).
 - DSL examples are in `examples/` (see `examples/README.md`).
 - Use `examples/.env.example` as a template for `examples/.env`.
+
+## VS Code Extension
+
+There is a VS Code extension for this project that provides:
+
+- syntax highlighting for `.lf` files
+- bundled executable/runtime integration
+- running tests directly from VS Code
+
+Extension link: [link](https://github.com/BulatovicBalsa/vscode-loadforge)
