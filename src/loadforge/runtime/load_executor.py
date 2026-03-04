@@ -110,7 +110,8 @@ async def _run_request_step_async(
     ctx: dict[str, str],
 ) -> httpx.Response:
     path = interpolate(step.path, ctx)
-    return await client.request(step.method, path)
+    method = step.method.value
+    return await client.request(method, path)
 
 
 def _run_expect_status_step(
@@ -282,13 +283,14 @@ async def run_scenario_async(
     for step in scenario.steps:
         if isinstance(step, Request):
             path = interpolate(step.path, ctx)
+            method = step.method.value
             start = time.perf_counter()
             try:
-                last_response = await client.request(step.method, path)
+                last_response = await client.request(method, path)
                 latency_ms = (time.perf_counter() - start) * 1000.0
                 metrics.record(
                     scenario=scenario_name,
-                    method=step.method,
+                    method=method,
                     path=path,
                     latency_ms=latency_ms,
                     status_code=last_response.status_code,
@@ -298,7 +300,7 @@ async def run_scenario_async(
                 latency_ms = (time.perf_counter() - start) * 1000.0
                 metrics.record(
                     scenario=scenario_name,
-                    method=step.method,
+                    method=method,
                     path=path,
                     latency_ms=latency_ms,
                     status_code=0,
