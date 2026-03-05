@@ -1,23 +1,23 @@
-test "Catalog Search - Full Demo" {
+test "CSV Multi-User Load Test" {
   environment {
-    baseUrl = env("BASE_URL")
     authEndpoint = env("AUTH_ENDPOINT")
-    username = env("USERNAME")
-    password = env("PASSWORD")
+    baseUrl = env("BASE_URL")
+    csvPath = env("CSV_PATH")
   }
 
   target #baseUrl
 
   auth login {
+    file #csvPath
     endpoint #authEndpoint
     method POST
     body {
-      username = "admin"
-      password = #password
+      username = "${username}"
+      password = "${password}"
     }
     format "$.access_token"
   }
-
+   
   variables {
     q = "phone"
     q2 = "laptop"
@@ -39,12 +39,12 @@ test "Catalog Search - Full Demo" {
 
   load {
     users 10
-    rampUp 5s
-    duration 30s
+    rampUp 2s
+    duration 10s
   }
 
   metrics {
     p95 < 500ms
-    errorRate < 2%
+    errorRate < 5%
   }
 }

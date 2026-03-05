@@ -44,7 +44,9 @@ def root() -> dict[str, str]:
 
 @app.post("/auth/login")
 def auth_login(payload: LoginPayload) -> dict[str, str]:
-    if payload.username == "admin" and payload.password == "admin":
+    print(payload)
+    if payload.username in ["alice@example.com", "charlie@example.com", "bob@example.com", "admin"] and payload.password == "admin":
+    # if payload.username == "admin" and payload.password == "admin":
         return {"access_token": "demo-token"}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
