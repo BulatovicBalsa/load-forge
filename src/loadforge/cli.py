@@ -113,9 +113,9 @@ def _prepare_environment(model: TestFile, env: Path | None) -> None:
     load_dotenv(dotenv_path=env, override=False)
 
 
-def _run_and_print(model: TestFile, *, control_stdin: bool) -> int:
+def _run_and_print(model: TestFile, *, control_stdin: bool, env_file_dir: Path) -> int:
     try:
-        result = run_test(model, control_stdin=control_stdin)
+        result = run_test(model, control_stdin=control_stdin, env_file_dir=env_file_dir)
         print(result)
         return 0
     except KeyboardInterrupt:
@@ -135,7 +135,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _print_test_name(model)
 
     _prepare_environment(model, options.env)
-    return _run_and_print(model, control_stdin=options.control_stdin)
+    
+    # Determine directory for resolving relative CSV paths
+    # Prefer .env file directory, fallback to .lf file directory
+    env_file_dir = options.env.parent if options.env else options.file.parent
+    
+    return _run_and_print(model, control_stdin=options.control_stdin, env_file_dir=env_file_dir)
 
 
 if __name__ == "__main__":

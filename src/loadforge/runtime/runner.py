@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -124,31 +125,45 @@ def run_test(
     *,
     transport=None,
     control_stdin: bool = False,
+    env_file_dir: Optional[Path] = None,
 ) -> LoadTestResult:
     """
     Run the test described by *model*.
+    
+    Args:
+        model: Parsed test model
+        transport: Optional HTTP transport (for testing)
+        control_stdin: Enable stdin control
+        env_file_dir: Directory for resolving relative CSV paths (usually .lf or .env file directory)
     """
     t = _get_test(model)
     base_url, ctx = _build_runtime_context(t)
     num_users, ramp_up_seconds, duration_seconds = _resolve_load_params(t)
 
-    # Run auth synchronously before the load test.
-    auth_success, auth_error = _run_auth_sync(base_url, t, ctx, transport=transport)
+    # If auth uses CSV file, skip global auth - each VU will auth individually
+    use_csv_auth = t.auth and t.auth.file
+    
+    auth_success: Optional[bool] = None
+    auth_error: Optional[str] = None
+    
+    if not use_csv_auth:
+        # Run auth synchronously before the load test (single shared token).
+        auth_success, auth_error = _run_auth_sync(base_url, t, ctx, transport=transport)
 
-    if auth_success is False:
-        return LoadTestResult(
-            test_name=t.name.strip().strip('"'),
-            users=num_users,
-            ramp_up_seconds=ramp_up_seconds,
-            target_duration_seconds=duration_seconds,
-            summary=_EMPTY_SUMMARY,
-            auth_success=auth_success,
-            auth_error=auth_error,
-            interrupted=False,
-            stop_reason=None,
-            metric_threshold_checks=0,
-            metric_threshold_failures=[],
-        )
+        if auth_success is False:
+            return LoadTestResult(
+                test_name=t.name.strip().strip('"'),
+                users=num_users,
+                ramp_up_seconds=ramp_up_seconds,
+                target_duration_seconds=duration_seconds,
+                summary=_EMPTY_SUMMARY,
+                auth_success=auth_success,
+                auth_error=auth_error,
+                interrupted=False,
+                stop_reason=None,
+                metric_threshold_checks=0,
+                metric_threshold_failures=[],
+            )
 
     # Run the load test (or single-pass functional test).
     metrics = asyncio.run(
@@ -161,6 +176,7 @@ def run_test(
             duration_seconds=duration_seconds,
             transport=transport,
             control_stdin=control_stdin,
+            env_file_dir=env_file_dir,
         )
     )
 
@@ -171,6 +187,15 @@ def run_test(
         if not metrics.interrupted
         else []
     )
+
+    # If CSV auth was used, determine auth success based on whether any requests succeeded
+    if use_csv_auth:
+        # If test ran for expected duration but no requests were made, auth likely failed
+        if not metrics.interrupted and summary.total_requests == 0 and duration_seconds > 0:
+            auth_success = False
+            auth_error = "Authentication failed for all users (no requests completed)"
+        elif not metrics.interrupted:
+            auth_success = True
 
     return LoadTestResult(
         test_name=t.name.strip().strip('"'),
