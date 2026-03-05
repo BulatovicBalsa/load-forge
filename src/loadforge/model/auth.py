@@ -18,6 +18,7 @@ class BodyBlock(TxNode):
 
 @dataclass
 class AuthLogin(TxNode):
+    file: Optional["ValueOrRef"] = None
     endpoint: Optional["ValueOrRef"] = None
     method: str = ""
     body: Optional[BodyBlock] = None

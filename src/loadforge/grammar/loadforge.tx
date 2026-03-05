@@ -16,6 +16,7 @@ Test:
 
 AuthLogin:
     'auth' 'login' '{'
+        ('file' file=ValueOrRef)?
         'endpoint' endpoint=ValueOrRef
         'method' method=HttpMethod
         'body' body=BodyBlock
