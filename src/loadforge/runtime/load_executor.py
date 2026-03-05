@@ -5,6 +5,7 @@ import signal
 import sys
 import time
 import re
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -17,6 +18,7 @@ from loadforge.model import (
     Request,
     Scenario,
     Test,
+    AuthLogin,
 )
 from loadforge.runtime.context import resolve_value_or_ref
 from loadforge.runtime.control import (
@@ -271,10 +273,18 @@ async def run_scenario_async(
     scenario: Scenario,
     ctx: dict[str, str],
     metrics: MetricsCollector,
+    extra_headers: Optional[dict[str, str]] = None,
 ) -> None:
     """
     Execute one full pass of a scenario, recording each request into *metrics*.
     Expect steps also run — assertion failures count towards the error rate.
+    
+    Args:
+        client: Async HTTP client
+        scenario: Scenario to execute
+        ctx: Execution context
+        metrics: Metrics collector
+        extra_headers: Optional per-user headers (e.g., Authorization token)
     """
     scenario_name = scenario.name.strip().strip('"')
     last_response: Optional[httpx.Response] = None
@@ -284,7 +294,7 @@ async def run_scenario_async(
             path = interpolate(step.path, ctx)
             start = time.perf_counter()
             try:
-                last_response = await client.request(step.method, path)
+                last_response = await client.request(step.method, path, headers=extra_headers)
                 latency_ms = (time.perf_counter() - start) * 1000.0
                 metrics.record(
                     scenario=scenario_name,
@@ -355,15 +365,34 @@ async def _virtual_user(
     metrics: MetricsCollector,
     stop_event: asyncio.Event,
     single_pass: bool = False,
+    auth_config: Optional['AuthLogin'] = None,
+    user_data: Optional[dict[str, str]] = None,
 ) -> None:
     """
     A single virtual user that executes scenarios.
     """
+    # Authenticate this user if auth config and user data exist
+    user_headers: dict[str, str] = {}
+    
+    if auth_config and user_data:
+        from .auth import authenticate_user_async
+        
+        try:
+            token = await authenticate_user_async(client, auth_config, ctx, user_data)
+            user_headers["Authorization"] = f"Bearer {token}"
+            
+        except Exception as e:
+            # Display first CSV column value for context
+            display_name = next(iter(user_data.values()), f"VU-{user_id}")
+            print(f"✗ User {user_id} ({display_name}) auth failed: {e}")
+            return
+    
+    # EXECUTE scenarios with per-user headers
     if single_pass:
         for scenario in scenarios:
             if stop_event.is_set():
                 return
-            await run_scenario_async(client, scenario, ctx, metrics)
+            await run_scenario_async(client, scenario, ctx, metrics, user_headers)
         return
 
     # Continuous loop until told to stop.
@@ -371,7 +400,7 @@ async def _virtual_user(
         for scenario in scenarios:
             if stop_event.is_set():
                 return
-            await run_scenario_async(client, scenario, ctx, metrics)
+            await run_scenario_async(client, scenario, ctx, metrics, user_headers)
             # Yield control briefly so other users get a chance to run and
             # the stop-event can be checked promptly.
             await asyncio.sleep(0)
@@ -391,6 +420,7 @@ async def run_load_test_async(
     duration_seconds: float = 0.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
     control_stdin: bool = False,
+    env_file_dir: Optional[Path] = None,
 ) -> MetricsCollector:
     """
     Run the load test for the given *test*.
@@ -410,6 +440,26 @@ async def run_load_test_async(
         ramp_up_seconds / num_users if ramp_up_seconds > 0 and not single_pass else 0.0
     )
 
+    # Load user data from CSV if auth config specifies a file
+    user_data_list: Optional[list[dict[str, str]]] = None
+    auth_config: Optional[AuthLogin] = test.auth
+    
+    if auth_config and auth_config.file:
+        from .csv_loader import load_user_data_from_csv
+        
+        if not env_file_dir:
+            env_file_dir = Path.cwd()
+        
+        try:
+            # Resolve file path (supports ValueOrRef - direct string or reference)
+            csv_file_path = resolve_value_or_ref(auth_config.file, ctx)
+            
+            user_data_list = load_user_data_from_csv(csv_file_path, env_file_dir)
+            print(f"✓ Loaded {len(user_data_list)} user(s) from CSV: {csv_file_path}")
+        except Exception as e:
+            print(f"Failed to load user data from CSV: {e}")
+            raise  # Re-raise original exception
+
     metrics = MetricsCollector()
     stop_event = asyncio.Event()
     stop_reason: Optional[str] = None
@@ -426,7 +476,8 @@ async def run_load_test_async(
         client_kwargs["transport"] = transport
 
     async with httpx.AsyncClient(**client_kwargs) as client:
-        if "authToken" in ctx:
+        # Set global auth header if not using CSV (CSV users get their own headers per-VU)
+        if "authToken" in ctx and not user_data_list:
             client.headers["Authorization"] = f"Bearer {ctx['authToken']}"
 
         metrics.start()
@@ -454,10 +505,17 @@ async def run_load_test_async(
                 if stop_event.is_set():
                     break
 
+                # Assign user data for this VU
+                user_data = None
+                if user_data_list:
+                    user_data = user_data_list[i % len(user_data_list)]
+
                 task = asyncio.create_task(
                     _virtual_user(
                         i, client, test.scenarios, ctx, metrics, stop_event,
                         single_pass=single_pass,
+                        auth_config=auth_config,
+                        user_data=user_data,
                     ),
                     name=f"vu-{i}",
                 )
