@@ -19,7 +19,7 @@ def run_auth_login(client: httpx.Client, auth: AuthLogin, ctx: dict[str, str]) -
         raise RuntimeError("auth.login missing body")
 
     endpoint = resolve_value_or_ref(auth.endpoint, ctx)
-    method = auth.method
+    method = auth.method.value
 
     payload: dict[str, Any] = {}
     for f in auth.body.fields:
@@ -66,7 +66,7 @@ async def authenticate_user_async(
         extended_ctx.update(user_data)
     
     endpoint = resolve_value_or_ref(auth.endpoint, extended_ctx)
-    method = auth.method
+    method = auth.method.value
     
     # Build request body
     payload: dict[str, Any] = {}
