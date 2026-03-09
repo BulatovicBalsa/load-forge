@@ -17,8 +17,10 @@ from .runtime.runner import run_test
 class CliOptions:
     file: Path
     env: Path | None
+    userlist: Path | None
     control_stdin: bool
     env_needed: bool
+    userlist_needed: bool
     return_name: bool
 
 
@@ -29,6 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("file", help="Path to .lf file")
     parser.add_argument("env", nargs="?", help="Optional path to .env file")
+    parser.add_argument("userlist", nargs="?", help="Optional path to .ulf user list file")
     parser.add_argument(
         "--control-stdin",
         action="store_true",
@@ -38,6 +41,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--env-needed",
         action="store_true",
         help="Returns true if environment variables are declared in the .lf file, false otherwise.",
+    )
+    parser.add_argument(
+        "--userlist-needed",
+        action="store_true",
+        help="Returns true if a user list file (.ulf) is required by the .lf file, false otherwise.",
     )
     parser.add_argument(
         "--name",
@@ -61,11 +69,19 @@ def parse_args(argv: Sequence[str] | None = None) -> CliOptions:
         if not env.exists():
             parser.error(f"Env file not found: {env}")
 
+    userlist: Path | None = None
+    if args.userlist:
+        userlist = Path(args.userlist).resolve()
+        if not userlist.exists():
+            parser.error(f"User list file not found: {userlist}")
+
     return CliOptions(
         file=file_path,
         env=env,
+        userlist=userlist,
         control_stdin=args.control_stdin,
         env_needed=args.env_needed,
+        userlist_needed=args.userlist_needed,
         return_name=args.name,
     )
 
@@ -91,8 +107,19 @@ def is_env_needed(model: TestFile) -> bool:
     )
 
 
+def is_userlist_needed(model: TestFile) -> bool:
+    return bool(
+        model.test and model.test.auth and model.test.auth.file
+    )
+
+
 def _print_env_needed(model: TestFile) -> int:
     print("true" if is_env_needed(model) else "false")
+    return 0
+
+
+def _print_userlist_needed(model: TestFile) -> int:
+    print("true" if is_userlist_needed(model) else "false")
     return 0
 
 
@@ -113,9 +140,29 @@ def _prepare_environment(model: TestFile, env: Path | None) -> None:
     load_dotenv(dotenv_path=env, override=False)
 
 
-def _run_and_print(model: TestFile, *, control_stdin: bool, base_dir: Path) -> int:
+def _prepare_userlist(model: TestFile, userlist: Path | None) -> Path | None:
+    if userlist is None:
+        if is_userlist_needed(model):
+            raise RuntimeError(
+                "A user list file (.ulf) is required by the .lf file, but no user list file path was provided."
+            )
+        return None
+
+    return userlist
+
+
+def _run_and_print(
+    model: TestFile,
+    *,
+    control_stdin: bool,
+    userlist_path: Path | None,
+) -> int:
     try:
-        result = run_test(model, control_stdin=control_stdin, base_dir=base_dir)
+        result = run_test(
+            model,
+            control_stdin=control_stdin,
+            userlist_path=userlist_path,
+        )
         print(result)
         return 0
     except KeyboardInterrupt:
@@ -140,15 +187,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     if options.env_needed:
         return _print_env_needed(model)
 
+    if options.userlist_needed:
+        return _print_userlist_needed(model)
+
     if options.return_name:
         return _print_test_name(model)
 
-    _prepare_environment(model, options.env)
-    
-    # Resolve relative paths (e.g. CSV files) against the .lf file's directory.
-    base_dir = options.file.parent
-    
-    return _run_and_print(model, control_stdin=options.control_stdin, base_dir=base_dir)
+    try:
+        _prepare_environment(model, options.env)
+        userlist_path = _prepare_userlist(model, options.userlist)
+    except RuntimeError as exc:
+        print(f"\033[91mError:\033[0m {exc}", file=sys.stderr)
+        return 1
+
+    return _run_and_print(
+        model,
+        control_stdin=options.control_stdin,
+        userlist_path=userlist_path,
+    )
 
 
 if __name__ == "__main__":
