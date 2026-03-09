@@ -48,14 +48,24 @@ Core blocks:
 `auth login` supports two execution modes:
 
 - Shared token auth (no `file` field): one login request is executed, and the same Bearer token is reused by all virtual users.
-- External users from CSV (`file` field present): credentials are loaded from a CSV file and each virtual user performs its own login using that row's values.
+- External users from `.ulf` file (`file` field present): credentials are loaded from a User List File (`.ulf`) and each virtual user performs its own login.
 
-CSV mode details:
+`.ulf` (User List File) format:
 
-- CSV path can be literal (`file "users.csv"`) or reference (`file #csvPath`).
-- Auth `body` fields use `${columnName}` interpolation from CSV columns.
-- If `load.users` is greater than the number of CSV rows, users are assigned in round-robin order.
-- Relative CSV paths are resolved from the `.lf` file directory.
+The `.ulf` file uses a simple `username : password` syntax, one entry per line, parsed by textX:
+
+```
+alice@example.com : secret123
+bob@example.com : hunter2
+charlie@example.com : pa$$w0rd
+```
+
+`.ulf` mode details:
+
+- The `.ulf` file must be in the same directory as the `.lf` file; specify just the filename: `file "users.ulf"`.
+- The file name can also be a reference: `file #usersFile`.
+- Auth `body` fields use `${username}` and `${password}` interpolation from `.ulf` entries.
+- If `load.users` is greater than the number of `.ulf` entries, users are assigned in round-robin order.
 
 ### Environment, Variables, and References
 
@@ -198,7 +208,7 @@ Runtime flow:
 2. `run_test` resolves env/vars/target.
 3. If `auth login` exists:
    - shared mode authenticates once before load and reuses one Bearer token;
-   - CSV mode authenticates each virtual user with credentials from external CSV.
+   - `.ulf` mode authenticates each virtual user with credentials from an external `.ulf` file.
 4. `run_load_test_async` starts virtual users with ramp-up behavior.
 5. Every `request` is sent via `httpx` and `asyncio`, latency is measured, and data is recorded into `MetricsCollector`.
 6. `expect` steps validate the last response; failures mark the last request as failed.
