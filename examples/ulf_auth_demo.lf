@@ -1,14 +1,13 @@
-test "CSV Multi-User Load Test" {
+test "ULF Multi-User Load Test" {
   environment {
     authEndpoint = env("AUTH_ENDPOINT")
     baseUrl = env("BASE_URL")
-    csvPath = env("CSV_PATH")
   }
 
   target #baseUrl
 
   auth login {
-    file #csvPath
+    file "test_users.ulf"
     endpoint #authEndpoint
     method POST
     body {
