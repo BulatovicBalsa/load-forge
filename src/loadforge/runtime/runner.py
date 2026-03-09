@@ -9,12 +9,11 @@ from .context import (
     resolve_variables,
     build_context,
     resolve_target,
-    resolve_value_or_ref,
 )
 from .load_executor import run_load_test_async
 from .load_result import LoadTestResult
 from .metric_thresholds import evaluate_metric_thresholds
-from .user import CsvUserSource, StaticUserSource, UserSource
+from .user import UlfUserSource, StaticUserSource, UserSource
 from ..model import TestFile
 
 
@@ -44,22 +43,21 @@ def _build_runtime_context(t) -> tuple[str, dict[str, str]]:
 def _build_user_source(
     t,
     ctx: dict[str, str],
-    base_dir: Optional[Path],
+    userlist_path: Optional[Path] = None,
 ) -> Optional[UserSource]:
     """
     Inspect the test model and return the appropriate ``UserSource``.
 
     * If auth is absent → ``None`` (no auth needed).
-    * If auth has a ``file`` field → ``CsvUserSource`` (per-user auth from CSV).
-    * Otherwise → ``StaticUserSource`` (shared token from env/variables).
+    * If auth has a ``file`` field → ``UlfUserSource`` (per-user auth from .ulf).
+      The *userlist_path* is validated and provided by the CLI.
+    * Otherwise → ``StaticUserSource`` (shared token).
     """
     if t.auth is None:
         return None
 
     if t.auth.file:
-        csv_path = resolve_value_or_ref(t.auth.file, ctx)
-        resolved_base = base_dir if base_dir else Path.cwd()
-        return CsvUserSource(csv_path, resolved_base, t.auth)
+        return UlfUserSource(userlist_path, t.auth)
 
     return StaticUserSource(ctx)
 
@@ -93,7 +91,7 @@ def run_test(
     *,
     transport=None,
     control_stdin: bool = False,
-    base_dir: Optional[Path] = None,
+    userlist_path: Optional[Path] = None,
 ) -> LoadTestResult:
     """
     Run the test described by *model*.
@@ -102,17 +100,16 @@ def run_test(
         model: Parsed test model
         transport: Optional HTTP transport (for testing)
         control_stdin: Enable stdin control
-        base_dir: Directory for resolving relative CSV paths
+        userlist_path: Resolved absolute path to the .ulf user list file
     """
     t = _get_test(model)
     base_url, ctx = _build_runtime_context(t)
     num_users, ramp_up_seconds, duration_seconds = _resolve_load_params(t)
 
     # Build the appropriate user source (None when no auth block).
-    user_source = _build_user_source(t, ctx, base_dir)
+    user_source = _build_user_source(t, ctx, userlist_path)
 
     # Run the load test (or single-pass functional test).
-    # All auth (shared *and* per-user) now happens inside the async context.
     metrics = asyncio.run(
         run_load_test_async(
             test=t,

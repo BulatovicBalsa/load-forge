@@ -2,7 +2,7 @@
 Authentication helpers for load testing.
 
 Provides a single async ``authenticate`` entry-point used by both the
-shared-token (static) and per-user (CSV) auth flows.
+shared-token (static) and per-user (.ulf) auth flows.
 """
 from __future__ import annotations
 

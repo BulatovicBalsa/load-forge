@@ -2,17 +2,17 @@
 User abstractions for load testing.
 
 Provides a unified interface for user identity regardless of source
-(static credentials from env/variables, or external CSV file).
+(static credentials from env/variables, or external .ulf file).
 """
 from __future__ import annotations
 
-import csv
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from loadforge.model.auth import AuthLogin
+from loadforge.model.userlist import UserListFile
 
 
 _VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)}")
@@ -65,19 +65,21 @@ class StaticUserSource:
         return 1
 
 
-class CsvUserSource:
+class UlfUserSource:
     """
-    Users loaded and validated from a CSV file.
+    Users loaded and validated from a .ulf (User List File).
+
+    The .ulf file uses the syntax ``username : password`` (one entry per line)
+    and is parsed by textX using the ``userlist.tx`` grammar.
     """
 
     def __init__(
         self,
-        csv_path: str,
-        base_dir: Path,
+        ulf_path: Path,
         auth: AuthLogin,
     ) -> None:
         required_columns = _extract_required_columns(auth)
-        self._users = _load_and_validate_csv(csv_path, base_dir, required_columns)
+        self._users = _load_and_validate_ulf(ulf_path, required_columns)
 
     @property
     def per_user_auth(self) -> bool:
@@ -98,7 +100,7 @@ class CsvUserSource:
 def _extract_required_columns(auth: AuthLogin) -> set[str]:
     """
     Scan ``${placeholder}`` references in the auth body field values and
-    return the set of column names the CSV must provide.
+    return the set of column names the user source must provide.
     """
     columns: set[str] = set()
     if auth.body is None:
@@ -111,56 +113,66 @@ def _extract_required_columns(auth: AuthLogin) -> set[str]:
     return columns
 
 
-def _load_and_validate_csv(
-    csv_path: str,
-    base_dir: Path,
+def _load_and_validate_ulf(
+    path: Path,
     required_columns: set[str],
 ) -> list[User]:
     """
-    Load *csv_path* (relative to *base_dir* when not absolute), validate
-    that all *required_columns* exist, and return a list of ``User`` objects.
+    Parse a ``.ulf`` file at the given *path* using textX and return a
+    list of ``User`` objects.
     """
-    path = Path(csv_path.strip().strip('"'))
-    if not path.is_absolute():
-        path = base_dir / path
-
     if not path.exists():
         raise FileNotFoundError(
-            f"User data CSV file not found: {path}\n"
-            f"Looking in: {base_dir}"
+            f"User list file not found: {path}\n"
+            f"Looking in: {path.parent}"
         )
 
-    with open(path, "r", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
+    # Validate that the auth body only references columns the .ulf provides
+    available: set[str] = {"username", "password"}
+    missing = required_columns - available
+    if missing:
+        raise ValueError(
+            f"Auth body references variable(s) not available in .ulf format: "
+            f"{sorted(missing)}. "
+            f"The .ulf format provides: {sorted(available)}. "
+            f"File: {path}"
+        )
 
-        if not reader.fieldnames:
-            raise ValueError(f"CSV file has no header row: {path}")
+    # Parse the .ulf file using the textX userlist grammar
+    from loadforge.parser.metamodel import build_userlist_metamodel
 
-        available = set(reader.fieldnames)
-        missing = required_columns - available
-        if missing:
+    mm = build_userlist_metamodel()
+    try:
+        model = mm.model_from_file(str(path))
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to parse user list file: {path}\n"
+            f"Expected format: username : password (one per line)\n"
+            f"Error: {exc}"
+        ) from exc
+
+    if not isinstance(model, UserListFile) or not model.entries:
+        raise ValueError(f"No user entries found in user list file: {path}")
+
+    users: list[User] = []
+    for i, entry in enumerate(model.entries, start=1):
+        username = entry.username.strip()
+        password = entry.password.strip()
+
+        if not username:
             raise ValueError(
-                f"CSV file is missing required column(s): {sorted(missing)}. "
-                f"Available columns: {sorted(available)}. "
-                f"File: {path}"
+                f"Empty username in entry {i} of user list file: {path}"
+            )
+        if not password:
+            raise ValueError(
+                f"Empty password in entry {i} of user list file: {path}"
             )
 
-        users: list[User] = []
-        for row_num, row in enumerate(reader, start=2):
-            cleaned = {key: value.strip() for key, value in row.items()}
-
-            empty_fields = [key for key, value in cleaned.items() if not value]
-            if empty_fields:
-                raise ValueError(
-                    f"Empty value(s) in CSV row {row_num} for column(s): "
-                    f"{', '.join(empty_fields)}\nFile: {path}"
-                )
-
-            # Use first column value as the human-readable display name.
-            display = next(iter(cleaned.values()), f"row-{row_num}")
-            users.append(User(credentials=cleaned, display_name=display))
-
-    if not users:
-        raise ValueError(f"No user data found in CSV file: {path}")
+        users.append(
+            User(
+                credentials={"username": username, "password": password},
+                display_name=username,
+            )
+        )
 
     return users
