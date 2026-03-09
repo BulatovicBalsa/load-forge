@@ -43,6 +43,20 @@ Core blocks:
 - `load`
 - `metrics`
 
+### Authentication Modes
+
+`auth login` supports two execution modes:
+
+- Shared token auth (no `file` field): one login request is executed, and the same Bearer token is reused by all virtual users.
+- External users from CSV (`file` field present): credentials are loaded from a CSV file and each virtual user performs its own login using that row's values.
+
+CSV mode details:
+
+- CSV path can be literal (`file "users.csv"`) or reference (`file #csvPath`).
+- Auth `body` fields use `${columnName}` interpolation from CSV columns.
+- If `load.users` is greater than the number of CSV rows, users are assigned in round-robin order.
+- Relative CSV paths are resolved from the `.lf` file directory.
+
 ### Environment, Variables, and References
 
 `environment` reads system variables via `env("KEY")`:
@@ -182,7 +196,9 @@ Runtime flow:
 
 1. `parse_file` loads DSL and creates model.
 2. `run_test` resolves env/vars/target.
-3. If `auth login` exists, it runs synchronously before load and sets Bearer token.
+3. If `auth login` exists:
+   - shared mode authenticates once before load and reuses one Bearer token;
+   - CSV mode authenticates each virtual user with credentials from external CSV.
 4. `run_load_test_async` starts virtual users with ramp-up behavior.
 5. Every `request` is sent via `httpx` and `asyncio`, latency is measured, and data is recorded into `MetricsCollector`.
 6. `expect` steps validate the last response; failures mark the last request as failed.

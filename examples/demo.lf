@@ -12,7 +12,7 @@ test "Catalog Search - Full Demo" {
     endpoint #authEndpoint
     method POST
     body {
-      username = "admin"
+      username = #username
       password = #password
     }
     format "$.access_token"
