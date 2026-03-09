@@ -43,7 +43,7 @@ def _build_runtime_context(t) -> tuple[str, dict[str, str]]:
 def _build_user_source(
     t,
     ctx: dict[str, str],
-    userlist_path: Optional[Path] = None,
+    userlist_path: Optional[Path],
 ) -> Optional[UserSource]:
     """
     Inspect the test model and return the appropriate ``UserSource``.
@@ -57,6 +57,10 @@ def _build_user_source(
         return None
 
     if t.auth.file:
+        if not userlist_path:
+            raise RuntimeError(
+                "Test model requires a user list file (.ulf), but no path was provided."
+            )
         return UlfUserSource(userlist_path, t.auth)
 
     return StaticUserSource(ctx)
