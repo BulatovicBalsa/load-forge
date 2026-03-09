@@ -19,7 +19,7 @@ test "ulf_auth_test" {
   target #baseUrl
 
   auth login {
-    file "test_users.ulf"
+    file
     endpoint #authEndpoint
     method POST
     body {
@@ -52,7 +52,7 @@ test "ulf_username_only" {
   target #baseUrl
 
   auth login {
-    file "test_users.ulf"
+    file
     endpoint #authEndpoint
     method POST
     body {
@@ -84,7 +84,7 @@ test "ulf_no_load" {
   target #baseUrl
 
   auth login {
-    file "test_users.ulf"
+    file
     endpoint #authEndpoint
     method POST
     body {
@@ -111,7 +111,7 @@ test "ulf_bad_placeholder" {
   target #baseUrl
 
   auth login {
-    file "test_users.ulf"
+    file
     endpoint #authEndpoint
     method POST
     body {
@@ -518,7 +518,7 @@ test "with_ulf" {
   target "http://localhost"
 
   auth login {
-    file "users.ulf"
+    file
     endpoint "/login"
     method POST
     body {

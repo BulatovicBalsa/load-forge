@@ -47,12 +47,16 @@ Core blocks:
 
 `auth login` supports two execution modes:
 
-- Shared token auth (no `file` field): one login request is executed, and the same Bearer token is reused by all virtual users.
-- External users from `.ulf` file (`file` field present): credentials are loaded from a User List File (`.ulf`) and each virtual user performs its own login.
+- Shared token auth (no `file` flag): one login request is executed, and the same Bearer token is reused by all virtual users.
+- Per-user auth (`file` flag present): each virtual user authenticates individually using credentials from an external `.ulf` (User List File) provided via the CLI.
 
-`.ulf` (User List File) format:
+The `file` keyword in the auth block is a boolean flag — it signals that a `.ulf` file is required. The actual path to the `.ulf` file is provided as a CLI argument (the same way `.env` is provided):
 
-The `.ulf` file uses a simple `username : password` syntax, one entry per line, parsed by textX:
+```
+loadforge test.lf .env users.ulf
+```
+
+`.ulf` (User List File) format uses a simple `username : password` syntax, one entry per line, parsed by textX:
 
 ```
 alice@example.com : secret123
@@ -62,8 +66,9 @@ charlie@example.com : pa$$w0rd
 
 `.ulf` mode details:
 
-- The `.ulf` file must be in the same directory as the `.lf` file; specify just the filename: `file "users.ulf"`.
-- The file name can also be a reference: `file #usersFile`.
+- The `file` flag in `auth login {}` declares that the test requires a `.ulf` file.
+- The `.ulf` file path is provided as the third positional CLI argument (after `.lf` and `.env`).
+- Use `--userlist-needed` to check whether a `.lf` file requires a `.ulf` file (prints `true` or `false`).
 - Auth `body` fields use `${username}` and `${password}` interpolation from `.ulf` entries.
 - If `load.users` is greater than the number of `.ulf` entries, users are assigned in round-robin order.
 

@@ -7,7 +7,7 @@ test "ULF Multi-User Load Test" {
   target #baseUrl
 
   auth login {
-    file "test_users.ulf"
+    file
     endpoint #authEndpoint
     method POST
     body {

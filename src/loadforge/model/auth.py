@@ -19,7 +19,7 @@ class BodyBlock(TxNode):
 
 @dataclass
 class AuthLogin(TxNode):
-    file: Optional["ValueOrRef"] = None
+    file: bool = False
     endpoint: Optional["ValueOrRef"] = None
     method: HttpMethod = HttpMethod.POST
     body: Optional[BodyBlock] = None
