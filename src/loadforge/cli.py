@@ -113,14 +113,23 @@ def _prepare_environment(model: TestFile, env: Path | None) -> None:
     load_dotenv(dotenv_path=env, override=False)
 
 
-def _run_and_print(model: TestFile, *, control_stdin: bool, env_file_dir: Path) -> int:
+def _run_and_print(model: TestFile, *, control_stdin: bool, base_dir: Path) -> int:
     try:
-        result = run_test(model, control_stdin=control_stdin, env_file_dir=env_file_dir)
+        result = run_test(model, control_stdin=control_stdin, base_dir=base_dir)
         print(result)
         return 0
     except KeyboardInterrupt:
         print("\033[93mTest interrupted by user.\033[0m")
         return 130
+    except FileNotFoundError as exc:
+        print(f"\033[91mFile not found:\033[0m {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"\033[91mValidation error:\033[0m {exc}", file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        print(f"\033[91mError:\033[0m {exc}", file=sys.stderr)
+        return 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -136,11 +145,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _prepare_environment(model, options.env)
     
-    # Determine directory for resolving relative CSV paths
-    # Prefer .env file directory, fallback to .lf file directory
-    env_file_dir = options.env.parent if options.env else options.file.parent
+    # Resolve relative paths (e.g. CSV files) against the .lf file's directory.
+    base_dir = options.file.parent
     
-    return _run_and_print(model, control_stdin=options.control_stdin, env_file_dir=env_file_dir)
+    return _run_and_print(model, control_stdin=options.control_stdin, base_dir=base_dir)
 
 
 if __name__ == "__main__":
