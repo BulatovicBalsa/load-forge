@@ -3,7 +3,6 @@ Tests for CSV-based multi-user authentication in load testing.
 """
 import httpx
 import pytest
-from pathlib import Path
 
 from loadforge.parser.parse import parse_str
 from loadforge.runtime.runner import run_test
@@ -302,10 +301,14 @@ def test_csv_missing_column_in_auth_body(monkeypatch, tmp_path):
         return httpx.Response(200, json={"token": "TOKEN"})
 
     transport = httpx.MockTransport(handler)
-    result = run_test(model, transport=transport)
-    
-    # Should fail authentication due to missing columns
-    assert result.auth_success is False
+
+    # Missing columns are now detected eagerly at CSV-load time
+    with pytest.raises(ValueError) as exc_info:
+        run_test(model, transport=transport)
+
+    assert "missing required column" in str(exc_info.value).lower()
+    assert "username" in str(exc_info.value)
+    assert "password" in str(exc_info.value)
 
 
 def test_csv_empty_values(monkeypatch, tmp_path):

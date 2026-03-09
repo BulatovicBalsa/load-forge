@@ -15,6 +15,50 @@ test "t" {
 }
 '''
 
+DSL_BAD_INTERPOLATION = r'''
+test "t" {
+  target "http://api.test"
+
+  scenario "s1" {
+    request GET "/items/${nonExistentVar}"
+    expect status 200
+  }
+}
+'''
+
+DSL_EXPECT_BEFORE_REQUEST = r'''
+test "t" {
+  target "http://api.test"
+
+  scenario "s1" {
+    expect status 200
+    request GET "/a"
+  }
+}
+'''
+
+DSL_TWO_SCENARIOS_SECOND_BAD = r'''
+test "t" {
+  target "http://api.test"
+
+  scenario "good" {
+    request GET "/a"
+    expect status 200
+  }
+
+  scenario "bad" {
+    request GET "/items/${missing}"
+    expect status 200
+  }
+
+  load {
+    users 1
+    rampUp 0s
+    duration 1s
+  }
+}
+'''
+
 DSL_TWO_SCENARIOS = r'''
 test "t" {
   target "http://api.test"
@@ -374,6 +418,64 @@ def test_partial_scenario_failure_records_correctly():
     by_name = {sc.name: sc for sc in result.summary.scenarios}
     assert by_name["ok"].failed_requests == 0
     assert by_name["bad"].failed_requests == 1
+
+
+def test_interpolation_error_recorded_as_failed_request():
+    """Interpolation errors in request paths should appear as failed metrics,
+    not silently kill the virtual user."""
+    model = parse_str(DSL_BAD_INTERPOLATION)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    transport = httpx.MockTransport(handler)
+    result = run_test(model, transport=transport)
+
+    assert result.total_requests == 1
+    assert result.failed == 1
+    assert result.summary.failed_requests == 1
+    # The error message should mention the unknown variable
+    errors = result.summary.scenarios[0].errors
+    assert any("nonExistentVar" in e for e in errors)
+
+
+def test_expect_before_request_recorded_as_error():
+    """Using expect status before any request should record an error,
+    not silently crash the virtual user."""
+    model = parse_str(DSL_EXPECT_BEFORE_REQUEST)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    transport = httpx.MockTransport(handler)
+    result = run_test(model, transport=transport)
+
+    # The expect-before-request error should be recorded
+    assert result.total_requests == 1
+    assert result.failed == 1
+
+
+def test_bad_interpolation_does_not_block_other_scenarios():
+    """A bad variable in one scenario should not prevent other scenarios
+    from executing in continuous mode."""
+    model = parse_str(DSL_TWO_SCENARIOS_SECOND_BAD)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    transport = httpx.MockTransport(handler)
+    result = run_test(model, transport=transport)
+
+    # The good scenario should have run successfully multiple times
+    assert result.total_requests > 0
+    good = [s for s in result.summary.scenarios if s.name == "good"]
+    assert len(good) == 1
+    assert good[0].successful_requests > 0
+
+    # The bad scenario should have recorded failures
+    bad = [s for s in result.summary.scenarios if s.name == "bad"]
+    assert len(bad) == 1
+    assert bad[0].failed_requests > 0
 
 
 def test_result_str_contains_test_name():
