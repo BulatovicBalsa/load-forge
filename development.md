@@ -56,16 +56,14 @@ Examples:
 # Run a test
 uv run loadforge examples/load_demo.lf examples/.env
 
-# Check whether file requires environment block
-uv run loadforge examples/demo.lf --env-needed
-
-# Print declared test name
-uv run loadforge examples/demo.lf --name
+# Print CLI metadata as JSON
+uv run loadforge examples/demo.lf --info
 ```
 
 Notes:
 
 - If DSL uses `environment { ... }` and you do not pass `.env`, CLI returns an error.
+- `--info` prints JSON with `env`, `userlist`, and `name`.
 - When using relative paths, ensure working directory is appropriate for `.lf`/`.env` paths.
 
 ## 4. Graceful Stop and stdin Control

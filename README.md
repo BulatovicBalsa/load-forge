@@ -68,7 +68,7 @@ charlie@example.com : pa$$w0rd
 
 - The `file` flag in `auth login {}` declares that the test requires a `.ulf` file.
 - The `.ulf` file path is provided as the third positional CLI argument (after `.lf` and `.env`).
-- Use `--userlist-needed` to check whether a `.lf` file requires a `.ulf` file (prints `true` or `false`).
+- Use `--info` to print JSON metadata for a `.lf` file, including `env`, `userlist`, and `name`.
 - Auth `body` fields use `${username}` and `${password}` interpolation from `.ulf` entries.
 - If `load.users` is greater than the number of `.ulf` entries, users are assigned in round-robin order.
 
