@@ -128,10 +128,11 @@ Recommended run configuration:
 PyInstaller spec exists in `loadforge.spec`.
 
 ```bash
-uv run pyinstaller --onefile --add-data "src/loadforge/grammar/loadforge.tx:loadforge/grammar" --name loadforge launcher.py
+uv run pyinstaller loadforge.spec --noconfirm
 ```
 
-Output goes to `dist/`, temporary artifacts go to `build/`.
+This produces an onedir bundle in `dist/loadforge/`, which is the format used for editor integration and release packaging.
+Temporary artifacts go to `build/`.
 
 ## 9. Adding New DSL Functionality
 
