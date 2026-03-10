@@ -6,6 +6,9 @@ on:
     tags-ignore:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
@@ -31,7 +34,20 @@ jobs:
         run: uv run pytest -q
 
       - name: Build onedir bundle
-        run: uv run pyinstaller loadforge.spec --noconfirm
+        run: uv run pyinstaller loadforge-onedir.spec --noconfirm
 
       - name: Verify onedir output
         run: test -d dist/loadforge
+
+      - name: Build onefile fallback
+        run: uv run pyinstaller loadforge-onefile.spec --noconfirm
+
+      - name: Verify onefile output
+        run: test -f dist/loadforge-fallback
+
+      - name: Upload onefile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadforge-fallback-linux-x64
+          path: dist/loadforge-fallback
+          if-no-files-found: error

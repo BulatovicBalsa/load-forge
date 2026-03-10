@@ -5,9 +5,6 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 jobs:
   build:
     strategy:
@@ -27,6 +24,8 @@ jobs:
             archive_name: loadforge-windows-x64.zip
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -46,7 +45,7 @@ jobs:
         run: uv sync
 
       - name: Build onedir bundle
-        run: uv run pyinstaller loadforge.spec --noconfirm
+        run: uv run pyinstaller loadforge-onedir.spec --noconfirm
 
       - name: Create zip archive (unix)
         if: runner.os != 'Windows'
@@ -70,6 +69,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout

@@ -125,13 +125,25 @@ Recommended run configuration:
 
 ## 8. Build Distribution
 
-PyInstaller spec exists in `loadforge.spec`.
+PyInstaller specs:
+
+- `loadforge-onedir.spec`: startup-optimized bundle for releases and editor-managed updates
+- `loadforge-onefile.spec`: fallback single-binary build for extension bootstrap scenarios
+
+Build the release/update bundle:
 
 ```bash
-uv run pyinstaller loadforge.spec --noconfirm
+uv run pyinstaller loadforge-onedir.spec --noconfirm
 ```
 
-This produces an onedir bundle in `dist/loadforge/`, which is the format used for editor integration and release packaging.
+Build the fallback single file:
+
+```bash
+uv run pyinstaller loadforge-onefile.spec --noconfirm
+```
+
+`loadforge-onedir.spec` produces `dist/loadforge/`.
+`loadforge-onefile.spec` produces a single fallback executable such as `dist/loadforge-fallback`.
 Temporary artifacts go to `build/`.
 
 ## 9. Adding New DSL Functionality
