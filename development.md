@@ -54,7 +54,7 @@ Examples:
 
 ```bash
 # Run a test
-uv run loadforge examples/load_demo.lf examples/.env
+uv run loadforge examples/load_demo.lf --env examples/.env
 
 # Print CLI metadata as JSON
 uv run loadforge examples/demo.lf --info
@@ -75,7 +75,7 @@ When enabled, runtime listens on stdin pipe and reacts to `STOP`.
 Example:
 
 ```bash
-printf "STOP\n" | uv run loadforge examples/load_demo.lf examples/.env --control-stdin
+printf "STOP\n" | uv run loadforge examples/load_demo.lf --env examples/.env --control-stdin
 ```
 
 ## 5. Testing

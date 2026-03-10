@@ -656,25 +656,24 @@ def test_cli_errors_when_userlist_needed_but_not_provided(tmp_path, capsys):
 
 
 def test_cli_accepts_userlist_path(tmp_path):
-    """CLI resolves the .ulf path from the third positional arg."""
+    """CLI resolves the .ulf path from the --userlist option."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_ULF_NO_LOAD)
 
     ulf_file = tmp_path / "test_users.ulf"
     ulf_file.write_text("alice : pass1\n")
 
-    # parse_args should accept and resolve the userlist path
-    opts = parse_args([str(lf_file), None, str(ulf_file)])
+    opts = parse_args([str(lf_file), "--userlist", str(ulf_file)])
     assert opts.userlist == ulf_file.resolve()
 
 
 def test_cli_userlist_file_not_found(tmp_path):
-    """CLI exits with error when the provided .ulf path does not exist."""
+    """CLI exits with error when the provided --userlist path does not exist."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_WITH_ULF)
 
     with pytest.raises(SystemExit) as exc_info:
-        parse_args([str(lf_file), None, str(tmp_path / "missing.ulf")])
+        parse_args([str(lf_file), "--userlist", str(tmp_path / "missing.ulf")])
 
     assert exc_info.value.code != 0
 

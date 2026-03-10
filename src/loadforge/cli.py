@@ -29,8 +29,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Run a LoadForge test file.",
     )
     parser.add_argument("file", help="Path to .lf file")
-    parser.add_argument("env", nargs="?", help="Optional path to .env file")
-    parser.add_argument("userlist", nargs="?", help="Optional path to .ulf user list file")
+    parser.add_argument("--env", help="Path to .env file")
+    parser.add_argument("--userlist", help="Path to .ulf user list file")
     parser.add_argument(
         "--control-stdin",
         action="store_true",
