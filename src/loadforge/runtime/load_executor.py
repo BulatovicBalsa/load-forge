@@ -4,28 +4,28 @@ import asyncio
 import signal
 import sys
 import time
-import re
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
-from jsonpath_ng.ext import parse as jsonpath_parse
 
 from loadforge.model import (
     ExpectJson,
     ExpectStatus,
-    JsonCheckKind,
     Request,
     Scenario,
     Test,
+    AuthLogin,
 )
-from loadforge.runtime.context import resolve_value_or_ref
+from loadforge.runtime.auth import AuthResult, authenticate
 from loadforge.runtime.control import (
     drain_virtual_users,
     start_stdin_control_listener,
     wait_for_stop_or_timeout,
 )
 from loadforge.runtime.interpolate import interpolate
+from loadforge.runtime.checks import run_expect_json_step, run_expect_status_step
 from loadforge.runtime.metrics import MetricsCollector
+from loadforge.runtime.user import User, UserSource
 
 
 # ---------------------------------------------------------------------------
@@ -100,178 +100,14 @@ class _ProgressDisplay:
 
 
 # ---------------------------------------------------------------------------
-# Async step runners
-# ---------------------------------------------------------------------------
-
-
-async def _run_request_step_async(
-    client: httpx.AsyncClient,
-    step: Request,
-    ctx: dict[str, str],
-) -> httpx.Response:
-    path = interpolate(step.path, ctx)
-    method = step.method.value
-    return await client.request(method, path)
-
-
-def _run_expect_status_step(
-    last_response: httpx.Response, step: ExpectStatus
-) -> None:
-    if last_response.status_code != step.code:
-        raise AssertionError(
-            f"Expected status {step.code}, got {last_response.status_code}"
-        )
-
-
-def _jsonpath_find(data: Any, json_path_literal: str):
-    expr = jsonpath_parse(json_path_literal.strip().strip('"'))
-    return expr.find(data)
-
-
-def _first_match_value(matches, json_path_literal: str) -> Any:
-    if not matches:
-        raise AssertionError(
-            f"JSONPath did not match anything: {json_path_literal.strip().strip('\"')}"
-        )
-    return matches[0].value
-
-
-def _run_expect_json_step(
-    last_response: httpx.Response, step: ExpectJson, ctx: dict[str, str]
-) -> None:
-    data = last_response.json()
-    matches = _jsonpath_find(data, step.path)
-    kind = step.check.kind
-
-    match kind:
-        case JsonCheckKind.isArray:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, list):
-                raise AssertionError(
-                    f"Expected JSON path to be array, got: {type(value)}"
-                )
-        case JsonCheckKind.notEmpty:
-            value = _first_match_value(matches, step.path)
-            if not value:
-                raise AssertionError(
-                    f"Expected JSON path to be not empty, got: {value!r}"
-                )
-        case JsonCheckKind.isEmpty:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, (list, dict, str)):
-                raise AssertionError(
-                    f"Expected '{step.path}' to be a list/dict/str for isEmpty, "
-                    f"got: {type(value).__name__}"
-                )
-            if len(value) != 0:
-                raise AssertionError(
-                    f"Expected '{step.path}' to be empty, got {len(value)} elements"
-                )
-        case JsonCheckKind.equals:
-            expected = resolve_value_or_ref(step.check.value, ctx)
-            value = _first_match_value(matches, step.path)
-            if value != expected:
-                raise AssertionError(
-                    f"JSON value mismatch, expected: {expected!r}, got: {value!r}"
-                )
-        case JsonCheckKind.hasSize:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, (list, dict, str)):
-                raise AssertionError(
-                    f"Expected JSON path to be sized (list/dict/str), got: {type(value)}"
-                )
-            actual = len(value)
-            if actual != step.check.size:
-                raise AssertionError(
-                    f"JSON size mismatch, expected: {step.check.size}, got: {actual}"
-                )
-        case JsonCheckKind.isNull:
-            if not matches or matches[0].value is not None:
-                actual = matches[0].value if matches else "<no match>"
-                raise AssertionError(
-                    f"Expected '{step.path}' to be null, got: {actual!r}"
-                )
-        case JsonCheckKind.notNull:
-            if not matches or matches[0].value is None:
-                raise AssertionError(
-                    f"Expected '{step.path}' to be not null, got null or no match"
-                )
-        case JsonCheckKind.isObject:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, dict):
-                raise AssertionError(
-                    f"Expected '{step.path}' to be an object, "
-                    f"got: {type(value).__name__}"
-                )
-        case JsonCheckKind.isString:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, str):
-                raise AssertionError(
-                    f"Expected '{step.path}' to be a string, "
-                    f"got: {type(value).__name__}"
-                )
-        case JsonCheckKind.isNumber:
-            value = _first_match_value(matches, step.path)
-            # bool je subclass int u Pythonu
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise AssertionError(
-                    f"Expected '{step.path}' to be a number, "
-                    f"got: {type(value).__name__}"
-                )
-        case JsonCheckKind.isBool:
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, bool):
-                raise AssertionError(
-                    f"Expected '{step.path}' to be a boolean, "
-                    f"got: {type(value).__name__}"
-                )
-        case JsonCheckKind.contains:
-            expected = resolve_value_or_ref(step.check.value, ctx)
-            value = _first_match_value(matches, step.path)
-            if isinstance(value, list):
-                if expected not in [str(v) for v in value]:
-                    raise AssertionError(
-                        f"Expected '{step.path}' to contain {expected!r}, "
-                        f"got: {value!r}"
-                    )
-            elif isinstance(value, str):
-                if expected not in value:
-                    raise AssertionError(
-                        f"Expected '{step.path}' to contain {expected!r}, "
-                        f"got: {value!r}"
-                    )
-            else:
-                raise AssertionError(
-                    f"'contains' requires list or string at '{step.path}', "
-                    f"got: {type(value).__name__}"
-                )
-        case JsonCheckKind.matches:
-            pattern = resolve_value_or_ref(step.check.value, ctx)
-            value = _first_match_value(matches, step.path)
-            if not isinstance(value, str):
-                raise AssertionError(
-                    f"'matches' requires string at '{step.path}', "
-                    f"got: {type(value).__name__}"
-                )
-            if not re.search(pattern, value):
-                raise AssertionError(
-                    f"Expected '{step.path}' to match pattern {pattern!r}, "
-                    f"got: {value!r}"
-                )
-        case _:
-            raise RuntimeError(f"Unsupported JsonCheckKind: {kind!r}")
-
-
-# ---------------------------------------------------------------------------
 # Async scenario runner — records metrics for every request
 # ---------------------------------------------------------------------------
-
-
 async def run_scenario_async(
     client: httpx.AsyncClient,
     scenario: Scenario,
     ctx: dict[str, str],
     metrics: MetricsCollector,
+    headers: Optional[dict[str, str]] = None,
 ) -> None:
     """
     Execute one full pass of a scenario, recording each request into *metrics*.
@@ -281,56 +117,75 @@ async def run_scenario_async(
     last_response: Optional[httpx.Response] = None
 
     for step in scenario.steps:
-        if isinstance(step, Request):
-            path = interpolate(step.path, ctx)
-            method = step.method.value
-            start = time.perf_counter()
-            try:
-                last_response = await client.request(method, path)
-                latency_ms = (time.perf_counter() - start) * 1000.0
+        try:
+            if isinstance(step, Request):
+                start = time.perf_counter()
+                try:
+                    path = interpolate(step.path, ctx)
+                    method = step.method.value
+                    last_response = await client.request(method, path, headers=headers)
+                    latency_ms = (time.perf_counter() - start) * 1000.0
+                    metrics.record(
+                        scenario=scenario_name,
+                        method=method,
+                        path=path,
+                        latency_ms=latency_ms,
+                        status_code=last_response.status_code,
+                        success=True,
+                    )
+                except Exception as exc:
+                    latency_ms = (time.perf_counter() - start) * 1000.0
+                    metrics.record(
+                        scenario=scenario_name,
+                        method=step.method.value,
+                        path=step.path.strip().strip('"'),
+                        latency_ms=latency_ms,
+                        status_code=0,
+                        success=False,
+                        error=str(exc),
+                    )
+                    return
+
+            elif isinstance(step, ExpectStatus):
+                if last_response is None:
+                    raise RuntimeError("expect status used before any request")
+                try:
+                    run_expect_status_step(last_response, step)
+                except AssertionError as exc:
+                    _mark_last_record_failed(metrics, str(exc))
+                    return
+
+            elif isinstance(step, ExpectJson):
+                if last_response is None:
+                    raise RuntimeError("expect json used before any request")
+                try:
+                    run_expect_json_step(last_response, step, ctx)
+                except AssertionError as exc:
+                    _mark_last_record_failed(metrics, str(exc))
+                    return
+
+            else:
+                raise RuntimeError(f"Unsupported step type: {type(step).__name__}")
+
+        except Exception as exc:
+            # Safety net: catch any error that escapes the inner handlers
+            # (e.g. RuntimeError from interpolation, expect-before-request,
+            # resolve_value_or_ref inside json checks, unsupported step type).
+            # Record it as a failure so it surfaces in the report instead of
+            # silently killing the virtual user.
+            if metrics.records:
+                _mark_last_record_failed(metrics, str(exc))
+            else:
                 metrics.record(
                     scenario=scenario_name,
-                    method=method,
-                    path=path,
-                    latency_ms=latency_ms,
-                    status_code=last_response.status_code,
-                    success=True,
-                )
-            except Exception as exc:
-                latency_ms = (time.perf_counter() - start) * 1000.0
-                metrics.record(
-                    scenario=scenario_name,
-                    method=method,
-                    path=path,
-                    latency_ms=latency_ms,
+                    method=getattr(step, "method", "").value if hasattr(getattr(step, "method", None), "value") else "",
+                    path=getattr(step, "path", "").strip().strip('"') if getattr(step, "path", "") else "",
+                    latency_ms=0.0,
                     status_code=0,
                     success=False,
                     error=str(exc),
                 )
-                # Skip in this loop
-                return
-
-        elif isinstance(step, ExpectStatus):
-            if last_response is None:
-                raise RuntimeError("expect status used before any request")
-            try:
-                _run_expect_status_step(last_response, step)
-            except AssertionError as exc:
-                # Mark the *most recent* request record as failed.
-                _mark_last_record_failed(metrics, str(exc))
-                return
-
-        elif isinstance(step, ExpectJson):
-            if last_response is None:
-                raise RuntimeError("expect json used before any request")
-            try:
-                _run_expect_json_step(last_response, step, ctx)
-            except AssertionError as exc:
-                _mark_last_record_failed(metrics, str(exc))
-                return
-
-        else:
-            raise RuntimeError(f"Unsupported step type: {type(step).__name__}")
+            return
 
 
 def _mark_last_record_failed(metrics: MetricsCollector, error: str) -> None:
@@ -357,15 +212,27 @@ async def _virtual_user(
     metrics: MetricsCollector,
     stop_event: asyncio.Event,
     single_pass: bool = False,
+    auth_config: Optional[AuthLogin] = None,
+    user: Optional[User] = None,
 ) -> None:
     """
     A single virtual user that executes scenarios.
     """
+    user_headers: dict[str, str] = {}
+
+    if auth_config and user:
+        result = await authenticate(client, auth_config, ctx, user)
+        metrics.record_auth(result)
+        if not result.success:
+            return
+        user_headers = result.headers
+
+    # EXECUTE scenarios with per-user headers
     if single_pass:
         for scenario in scenarios:
             if stop_event.is_set():
                 return
-            await run_scenario_async(client, scenario, ctx, metrics)
+            await run_scenario_async(client, scenario, ctx, metrics, user_headers)
         return
 
     # Continuous loop until told to stop.
@@ -373,7 +240,7 @@ async def _virtual_user(
         for scenario in scenarios:
             if stop_event.is_set():
                 return
-            await run_scenario_async(client, scenario, ctx, metrics)
+            await run_scenario_async(client, scenario, ctx, metrics, user_headers)
             # Yield control briefly so other users get a chance to run and
             # the stop-event can be checked promptly.
             await asyncio.sleep(0)
@@ -393,6 +260,7 @@ async def run_load_test_async(
     duration_seconds: float = 0.0,
     transport: Optional[httpx.AsyncBaseTransport] = None,
     control_stdin: bool = False,
+    user_source: Optional[UserSource] = None,
 ) -> MetricsCollector:
     """
     Run the load test for the given *test*.
@@ -412,6 +280,8 @@ async def run_load_test_async(
         ramp_up_seconds / num_users if ramp_up_seconds > 0 and not single_pass else 0.0
     )
 
+    auth_config: Optional[AuthLogin] = test.auth
+
     metrics = MetricsCollector()
     stop_event = asyncio.Event()
     stop_reason: Optional[str] = None
@@ -428,8 +298,16 @@ async def run_load_test_async(
         client_kwargs["transport"] = transport
 
     async with httpx.AsyncClient(**client_kwargs) as client:
-        if "authToken" in ctx:
-            client.headers["Authorization"] = f"Bearer {ctx['authToken']}"
+        # Shared-token auth: authenticate once before spawning VUs.
+        if auth_config and user_source and not user_source.per_user_auth:
+            shared_user = user_source.get_user(0)
+            result = await authenticate(client, auth_config, ctx, shared_user)
+            metrics.record_auth(result)
+            if not result.success:
+                metrics.mark_interrupted(reason=f"auth failed: {result.error}")
+                return metrics
+            client.headers["Authorization"] = f"Bearer {result.token}"
+            ctx["authToken"] = result.token
 
         metrics.start()
         progress: Optional[_ProgressDisplay] = None
@@ -456,10 +334,20 @@ async def run_load_test_async(
                 if stop_event.is_set():
                     break
 
+                # Assign user for this VU (per-user auth sources get
+                # their own User; shared auth has already been handled).
+                vu_user: Optional[User] = None
+                vu_auth: Optional[AuthLogin] = None
+                if user_source and user_source.per_user_auth and auth_config:
+                    vu_user = user_source.get_user(i)
+                    vu_auth = auth_config
+
                 task = asyncio.create_task(
                     _virtual_user(
                         i, client, test.scenarios, ctx, metrics, stop_event,
                         single_pass=single_pass,
+                        auth_config=vu_auth,
+                        user=vu_user,
                     ),
                     name=f"vu-{i}",
                 )

@@ -43,6 +43,35 @@ Core blocks:
 - `load`
 - `metrics`
 
+### Authentication Modes
+
+`auth login` supports two execution modes:
+
+- Shared token auth (no `file` flag): one login request is executed, and the same Bearer token is reused by all virtual users.
+- Per-user auth (`file` flag present): each virtual user authenticates individually using credentials from an external `.ulf` (User List File) provided via the CLI.
+
+The `file` keyword in the auth block is a boolean flag — it signals that a `.ulf` file is required. The actual path to the `.ulf` file is provided as a CLI argument (the same way `.env` is provided):
+
+```
+loadforge test.lf .env users.ulf
+```
+
+`.ulf` (User List File) format uses a simple `username : password` syntax, one entry per line, parsed by textX:
+
+```
+alice@example.com : secret123
+bob@example.com : hunter2
+charlie@example.com : pa$$w0rd
+```
+
+`.ulf` mode details:
+
+- The `file` flag in `auth login {}` declares that the test requires a `.ulf` file.
+- The `.ulf` file path is provided as the third positional CLI argument (after `.lf` and `.env`).
+- Use `--userlist-needed` to check whether a `.lf` file requires a `.ulf` file (prints `true` or `false`).
+- Auth `body` fields use `${username}` and `${password}` interpolation from `.ulf` entries.
+- If `load.users` is greater than the number of `.ulf` entries, users are assigned in round-robin order.
+
 ### Environment, Variables, and References
 
 `environment` reads system variables via `env("KEY")`:
@@ -182,7 +211,9 @@ Runtime flow:
 
 1. `parse_file` loads DSL and creates model.
 2. `run_test` resolves env/vars/target.
-3. If `auth login` exists, it runs synchronously before load and sets Bearer token.
+3. If `auth login` exists:
+   - shared mode authenticates once before load and reuses one Bearer token;
+   - `.ulf` mode authenticates each virtual user with credentials from an external `.ulf` file.
 4. `run_load_test_async` starts virtual users with ramp-up behavior.
 5. Every `request` is sent via `httpx` and `asyncio`, latency is measured, and data is recorded into `MetricsCollector`.
 6. `expect` steps validate the last response; failures mark the last request as failed.

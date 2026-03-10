@@ -1,0 +1,7 @@
+UserListFile:
+    entries*=UserEntry
+;
+
+UserEntry:
+    username=/[^\s:]+/ ':' password=/[^\s:]+/
+;

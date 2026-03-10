@@ -3,7 +3,10 @@ from __future__ import annotations
 import statistics
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from loadforge.runtime.auth import AuthResult
 
 
 @dataclass
@@ -107,6 +110,7 @@ class MetricsCollector:
 
     def __init__(self) -> None:
         self._records: list[RequestRecord] = []
+        self._auth_results: list[AuthResult] = []
         self._start_time: float = 0.0
         self._end_time: float = 0.0
         self._interrupted: bool = False
@@ -115,6 +119,14 @@ class MetricsCollector:
     @property
     def records(self) -> list[RequestRecord]:
         return self._records
+
+    @property
+    def auth_results(self) -> list[AuthResult]:
+        return self._auth_results
+
+    def record_auth(self, result: AuthResult) -> None:
+        """Append an authentication outcome."""
+        self._auth_results.append(result)
 
     @property
     def interrupted(self) -> bool:

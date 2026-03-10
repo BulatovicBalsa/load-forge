@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, field
 from typing import Optional
 
+from loadforge.runtime.auth import AuthResult
 from loadforge.runtime.metrics import MetricsSummary
 
 
@@ -20,8 +22,6 @@ class Color:
 class LoadTestResult:
     """
     Final report object for a load test run.
-
-    Wraps a MetricsSummary and an optional auth result
     """
 
     test_name: str
@@ -29,12 +29,53 @@ class LoadTestResult:
     ramp_up_seconds: float
     target_duration_seconds: float
     summary: MetricsSummary
-    auth_success: Optional[bool] = None
-    auth_error: Optional[str] = None
+    auth_results: list[AuthResult] = field(default_factory=list)
     interrupted: bool = False
     stop_reason: Optional[str] = None
     metric_threshold_checks: int = 0
     metric_threshold_failures: list[str] = field(default_factory=list)
+
+    # ------------------------------------------------------------------
+    # Derived auth properties
+    # ------------------------------------------------------------------
+
+    @property
+    def auth_success(self) -> Optional[bool]:
+        """
+        Aggregate auth outcome.
+
+        * ``None``  – no auth was attempted.
+        * ``True``  – at least one user authenticated successfully.
+        * ``False`` – every attempt failed.
+        """
+        if not self.auth_results:
+            return None
+        return any(r.success for r in self.auth_results)
+
+    @property
+    def auth_error(self) -> Optional[str]:
+        """First auth error message, if any."""
+        for r in self.auth_results:
+            if r.error:
+                return r.error
+        return None
+
+    @property
+    def auth_succeeded_count(self) -> int:
+        return sum(1 for r in self.auth_results if r.success)
+
+    @property
+    def auth_failed_count(self) -> int:
+        return sum(1 for r in self.auth_results if not r.success)
+
+    @property
+    def auth_avg_latency_ms(self) -> float:
+        latencies = [r.latency_ms for r in self.auth_results]
+        return statistics.mean(latencies) if latencies else 0.0
+
+    # ------------------------------------------------------------------
+    # Overall result
+    # ------------------------------------------------------------------
 
     @property
     def success(self) -> bool:
@@ -54,6 +95,10 @@ class LoadTestResult:
     def failed(self) -> int:
         return self.summary.failed_requests
 
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
+
     def _render_header(self) -> list[str]:
         lines = [
             f"{Color.BOLD}{Color.CYAN}LoadForge Load Test Report{Color.RESET}",
@@ -66,15 +111,53 @@ class LoadTestResult:
         return lines
 
     def _render_auth(self) -> list[str]:
-        if self.auth_success is None:
+        if not self.auth_results:
             return []
-        if self.auth_success:
+
+        succeeded = self.auth_succeeded_count
+        failed = self.auth_failed_count
+        total = len(self.auth_results)
+
+        if failed == 0:
             status = f"{Color.GREEN}✔ PASS{Color.RESET}"
-        else:
+        elif succeeded == 0:
             status = f"{Color.RED}✘ FAIL{Color.RESET}"
-        lines = [f"{Color.BOLD}Auth:{Color.RESET}  {status}"]
-        if self.auth_error:
-            lines.append(f"  {Color.YELLOW}{self.auth_error}{Color.RESET}")
+        else:
+            status = f"{Color.YELLOW}✔ PARTIAL{Color.RESET}"
+
+        lines = [
+            f"{Color.BOLD}Auth:{Color.RESET}  {status}"
+            f"  {Color.DIM}({succeeded}/{total} users){Color.RESET}"
+        ]
+
+        # Latency summary
+        latencies = [r.latency_ms for r in self.auth_results if r.success]
+        if latencies:
+            avg = statistics.mean(latencies)
+            lo = min(latencies)
+            hi = max(latencies)
+            if len(latencies) == 1:
+                lines.append(
+                    f"  Latency: {avg:.1f}ms"
+                )
+            else:
+                lines.append(
+                    f"  Latency: avg {avg:.1f}ms"
+                    f" {Color.DIM}|{Color.RESET} min {lo:.1f}ms"
+                    f" {Color.DIM}|{Color.RESET} max {hi:.1f}ms"
+                )
+
+        # Show individual failures (cap at 5 to avoid flooding the report)
+        failures = [r for r in self.auth_results if not r.success]
+        for r in failures[:5]:
+            lines.append(
+                f"  {Color.RED}✗ {r.user_display_name}: {r.error}{Color.RESET}"
+            )
+        if len(failures) > 5:
+            lines.append(
+                f"  {Color.DIM}… and {len(failures) - 5} more failure(s){Color.RESET}"
+            )
+
         lines.append("")
         return lines
 

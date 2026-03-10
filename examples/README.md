@@ -8,6 +8,8 @@ This folder contains practical `.lf` examples from minimal to full-featured.
 - `load_demo.lf`: minimal load test with `users/rampUp/duration`
 - `demo_metrics.lf`: load test plus metrics thresholds (`p95`, `errorRate`)
 - `expect_json_demo.lf`: JSONPath assertions and all supported JSON check types
+- `ulf_auth_demo.lf`: multi-user auth using a `.ulf` (User List File) for per-user credentials
+- `test_users.ulf`: example `.ulf` file with `username : password` syntax used by `ulf_auth_demo.lf`
 - `demo.lf`: full scenario with env references, auth login, variables/interpolation, load, and metrics
 
 ## Environment

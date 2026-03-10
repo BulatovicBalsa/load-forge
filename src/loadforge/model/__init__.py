@@ -5,6 +5,7 @@ from .quality import MetricsBlock, MetricExpectation
 from .scenario import Request, ExpectStatus, Scenario, ExpectJson, JsonCheck, JsonCheckKind, HttpMethod
 from .core import EnvCall, EnvVar, Environment, Target, Test, TestFile
 from .auth import AuthLogin, BodyBlock, BodyField
+from .userlist import UserEntry, UserListFile
 
 __all__ = [
     "TxNode",
@@ -14,4 +15,5 @@ __all__ = [
     "Request", "ExpectStatus", "Scenario", "ExpectJson", "JsonCheck", "JsonCheckKind", "HttpMethod",
     "EnvCall", "EnvVar", "Environment", "Target", "Test", "TestFile",
     "AuthLogin", "BodyBlock", "BodyField",
+    "UserEntry", "UserListFile",
 ]
