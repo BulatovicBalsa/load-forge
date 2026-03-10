@@ -4,7 +4,9 @@ Tests for .ulf (User List File) based multi-user authentication in load testing.
 import httpx
 import pytest
 
-from loadforge.cli import is_userlist_needed, main as cli_main, parse_args
+import json
+
+from loadforge.cli import is_env_needed, is_userlist_needed, main as cli_main, parse_args
 from loadforge.parser.parse import parse_str, parse_file
 from loadforge.runtime.runner import run_test
 
@@ -510,7 +512,7 @@ def test_ulf_single_entry_parsed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# CLI: --userlist-needed
+# CLI: --info
 # ---------------------------------------------------------------------------
 
 DSL_WITH_ULF = r'''
@@ -569,7 +571,7 @@ test "auth_no_file" {
 
 
 def test_is_userlist_needed_true():
-    """is_userlist_needed returns True when auth login has a file field."""
+    """is_userlist_needed returns True when auth login has a file flag."""
     model = parse_str(DSL_WITH_ULF)
     assert is_userlist_needed(model) is True
 
@@ -581,39 +583,65 @@ def test_is_userlist_needed_false_no_auth():
 
 
 def test_is_userlist_needed_false_auth_without_file():
-    """is_userlist_needed returns False when auth exists but has no file field."""
+    """is_userlist_needed returns False when auth exists but has no file flag."""
     model = parse_str(DSL_AUTH_NO_FILE)
     assert is_userlist_needed(model) is False
 
 
-def test_cli_userlist_needed_prints_true(tmp_path, capsys):
-    """--userlist-needed prints 'true' for a .lf that uses file in auth."""
+def test_is_env_needed_true():
+    """is_env_needed returns True when the .lf declares environment vars."""
+    model = parse_str(DSL_ULF_AUTH)
+    assert is_env_needed(model) is True
+
+
+def test_is_env_needed_false():
+    """is_env_needed returns False when there is no environment block."""
+    model = parse_str(DSL_WITHOUT_ULF)
+    assert is_env_needed(model) is False
+
+
+def test_cli_info_with_userlist_only(tmp_path, capsys):
+    """--info prints JSON metadata for a file that requires only userlist."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_WITH_ULF)
 
-    ret = cli_main(["--userlist-needed", str(lf_file)])
+    ret = cli_main(["--info", str(lf_file)])
     assert ret == 0
-    assert capsys.readouterr().out.strip() == "true"
+    info = json.loads(capsys.readouterr().out)
+    assert info == {"env": False, "userlist": True, "name": "with_ulf"}
 
 
-def test_cli_userlist_needed_prints_false(tmp_path, capsys):
-    """--userlist-needed prints 'false' for a .lf without file in auth."""
+def test_cli_info_no_requirements(tmp_path, capsys):
+    """--info prints JSON metadata when no external files are required."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_WITHOUT_ULF)
 
-    ret = cli_main(["--userlist-needed", str(lf_file)])
+    ret = cli_main(["--info", str(lf_file)])
     assert ret == 0
-    assert capsys.readouterr().out.strip() == "false"
+    info = json.loads(capsys.readouterr().out)
+    assert info == {"env": False, "userlist": False, "name": "no_ulf"}
 
 
-def test_cli_userlist_needed_false_for_static_auth(tmp_path, capsys):
-    """--userlist-needed prints 'false' for auth login without file."""
+def test_cli_info_env_only(tmp_path, capsys):
+    """--info prints env/userlist/name metadata for static auth without file input."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_AUTH_NO_FILE)
 
-    ret = cli_main(["--userlist-needed", str(lf_file)])
+    ret = cli_main(["--info", str(lf_file)])
     assert ret == 0
-    assert capsys.readouterr().out.strip() == "false"
+    info = json.loads(capsys.readouterr().out)
+    assert info == {"env": False, "userlist": False, "name": "auth_no_file"}
+
+
+def test_cli_info_env_and_userlist_both_true(tmp_path, capsys):
+    """--info prints both requirements plus the test name when both are needed."""
+    lf_file = tmp_path / "test.lf"
+    lf_file.write_text(DSL_ULF_AUTH)
+
+    ret = cli_main(["--info", str(lf_file)])
+    assert ret == 0
+    info = json.loads(capsys.readouterr().out)
+    assert info == {"env": True, "userlist": True, "name": "ulf_auth_test"}
 
 
 def test_cli_errors_when_userlist_needed_but_not_provided(tmp_path, capsys):
@@ -628,25 +656,24 @@ def test_cli_errors_when_userlist_needed_but_not_provided(tmp_path, capsys):
 
 
 def test_cli_accepts_userlist_path(tmp_path):
-    """CLI resolves the .ulf path from the third positional arg."""
+    """CLI resolves the .ulf path from the --userlist option."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_ULF_NO_LOAD)
 
     ulf_file = tmp_path / "test_users.ulf"
     ulf_file.write_text("alice : pass1\n")
 
-    # parse_args should accept and resolve the userlist path
-    opts = parse_args([str(lf_file), None, str(ulf_file)])
+    opts = parse_args([str(lf_file), "--userlist", str(ulf_file)])
     assert opts.userlist == ulf_file.resolve()
 
 
 def test_cli_userlist_file_not_found(tmp_path):
-    """CLI exits with error when the provided .ulf path does not exist."""
+    """CLI exits with error when the provided --userlist path does not exist."""
     lf_file = tmp_path / "test.lf"
     lf_file.write_text(DSL_WITH_ULF)
 
     with pytest.raises(SystemExit) as exc_info:
-        parse_args([str(lf_file), None, str(tmp_path / "missing.ulf")])
+        parse_args([str(lf_file), "--userlist", str(tmp_path / "missing.ulf")])
 
     assert exc_info.value.code != 0
 

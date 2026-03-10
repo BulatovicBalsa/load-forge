@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -19,9 +20,7 @@ class CliOptions:
     env: Path | None
     userlist: Path | None
     control_stdin: bool
-    env_needed: bool
-    userlist_needed: bool
-    return_name: bool
+    info: bool
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -30,27 +29,17 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Run a LoadForge test file.",
     )
     parser.add_argument("file", help="Path to .lf file")
-    parser.add_argument("env", nargs="?", help="Optional path to .env file")
-    parser.add_argument("userlist", nargs="?", help="Optional path to .ulf user list file")
+    parser.add_argument("--env", help="Path to .env file")
+    parser.add_argument("--userlist", help="Path to .ulf user list file")
     parser.add_argument(
         "--control-stdin",
         action="store_true",
         help="Enable STOP control command via stdin pipe.",
     )
     parser.add_argument(
-        "--env-needed",
+        "--info",
         action="store_true",
-        help="Returns true if environment variables are declared in the .lf file, false otherwise.",
-    )
-    parser.add_argument(
-        "--userlist-needed",
-        action="store_true",
-        help="Returns true if a user list file (.ulf) is required by the .lf file, false otherwise.",
-    )
-    parser.add_argument(
-        "--name",
-        action="store_true",
-        help="Returns the test name declared in the .lf file.",
+        help='Print JSON describing .lf metadata, e.g. {"env": true, "userlist": false, "name": "demo"}.',
     )
     return parser
 
@@ -80,9 +69,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliOptions:
         env=env,
         userlist=userlist,
         control_stdin=args.control_stdin,
-        env_needed=args.env_needed,
-        userlist_needed=args.userlist_needed,
-        return_name=args.name,
+        info=args.info,
     )
 
 
@@ -113,19 +100,13 @@ def is_userlist_needed(model: TestFile) -> bool:
     )
 
 
-def _print_env_needed(model: TestFile) -> int:
-    print("true" if is_env_needed(model) else "false")
-    return 0
-
-
-def _print_userlist_needed(model: TestFile) -> int:
-    print("true" if is_userlist_needed(model) else "false")
-    return 0
-
-
-def _print_test_name(model: TestFile) -> int:
-    if model.test and model.test.name:
-        print(model.test.name)
+def _print_info(model: TestFile) -> int:
+    info = {
+        "env": is_env_needed(model),
+        "userlist": is_userlist_needed(model),
+        "name": model.test.name if model.test and model.test.name else "",
+    }
+    print(json.dumps(info))
     return 0
 
 
@@ -184,14 +165,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     options = parse_args(argv)
     model = parse_file(options.file)
 
-    if options.env_needed:
-        return _print_env_needed(model)
-
-    if options.userlist_needed:
-        return _print_userlist_needed(model)
-
-    if options.return_name:
-        return _print_test_name(model)
+    if options.info:
+        return _print_info(model)
 
     try:
         _prepare_environment(model, options.env)

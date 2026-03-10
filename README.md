@@ -53,7 +53,7 @@ Core blocks:
 The `file` keyword in the auth block is a boolean flag — it signals that a `.ulf` file is required. The actual path to the `.ulf` file is provided as a CLI argument (the same way `.env` is provided):
 
 ```
-loadforge test.lf .env users.ulf
+loadforge test.lf --env .env --userlist users.ulf
 ```
 
 `.ulf` (User List File) format uses a simple `username : password` syntax, one entry per line, parsed by textX:
@@ -67,8 +67,8 @@ charlie@example.com : pa$$w0rd
 `.ulf` mode details:
 
 - The `file` flag in `auth login {}` declares that the test requires a `.ulf` file.
-- The `.ulf` file path is provided as the third positional CLI argument (after `.lf` and `.env`).
-- Use `--userlist-needed` to check whether a `.lf` file requires a `.ulf` file (prints `true` or `false`).
+- The `.ulf` file path is provided via `--userlist`; `.env` is provided via `--env`.
+- Use `--info` to print JSON metadata for a `.lf` file, including `env`, `userlist`, and `name`.
 - Auth `body` fields use `${username}` and `${password}` interpolation from `.ulf` entries.
 - If `load.users` is greater than the number of `.ulf` entries, users are assigned in round-robin order.
 

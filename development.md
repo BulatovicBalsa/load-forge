@@ -54,18 +54,16 @@ Examples:
 
 ```bash
 # Run a test
-uv run loadforge examples/load_demo.lf examples/.env
+uv run loadforge examples/load_demo.lf --env examples/.env
 
-# Check whether file requires environment block
-uv run loadforge examples/demo.lf --env-needed
-
-# Print declared test name
-uv run loadforge examples/demo.lf --name
+# Print CLI metadata as JSON
+uv run loadforge examples/demo.lf --info
 ```
 
 Notes:
 
 - If DSL uses `environment { ... }` and you do not pass `.env`, CLI returns an error.
+- `--info` prints JSON with `env`, `userlist`, and `name`.
 - When using relative paths, ensure working directory is appropriate for `.lf`/`.env` paths.
 
 ## 4. Graceful Stop and stdin Control
@@ -77,7 +75,7 @@ When enabled, runtime listens on stdin pipe and reacts to `STOP`.
 Example:
 
 ```bash
-printf "STOP\n" | uv run loadforge examples/load_demo.lf examples/.env --control-stdin
+printf "STOP\n" | uv run loadforge examples/load_demo.lf --env examples/.env --control-stdin
 ```
 
 ## 5. Testing
@@ -127,13 +125,26 @@ Recommended run configuration:
 
 ## 8. Build Distribution
 
-PyInstaller spec exists in `loadforge.spec`.
+PyInstaller specs:
+
+- `loadforge-onedir.spec`: startup-optimized bundle for releases and editor-managed updates
+- `loadforge-onefile.spec`: fallback single-binary build for extension bootstrap scenarios
+
+Build the release/update bundle:
 
 ```bash
-uv run pyinstaller --onefile --add-data "src/loadforge/grammar/loadforge.tx:loadforge/grammar" --name loadforge launcher.py
+uv run pyinstaller loadforge-onedir.spec --noconfirm
 ```
 
-Output goes to `dist/`, temporary artifacts go to `build/`.
+Build the fallback single file:
+
+```bash
+uv run pyinstaller loadforge-onefile.spec --noconfirm
+```
+
+`loadforge-onedir.spec` produces `dist/loadforge/`.
+`loadforge-onefile.spec` produces a single fallback executable such as `dist/loadforge-fallback`.
+Temporary artifacts go to `build/`.
 
 ## 9. Adding New DSL Functionality
 
