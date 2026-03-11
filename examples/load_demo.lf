@@ -1,0 +1,22 @@
+test "Load Smoke Demo" {
+  environment {
+    baseUrl = env("BASE_URL")
+  }
+
+  target #baseUrl
+
+  variables {
+    homePath = "/"
+  }
+
+  scenario "fetch index" {
+    request GET "${homePath}"
+    expect status 200
+  }
+
+  load {
+    users 5
+    rampUp 2s
+    duration 5s
+  }
+}

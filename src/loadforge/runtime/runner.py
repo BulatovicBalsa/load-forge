@@ -1,17 +1,19 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
 from typing import Optional
 
-import httpx
-
-from .auth import run_auth_login
 from .context import (
     resolve_env,
     resolve_variables,
     build_context,
     resolve_target,
 )
-from .executor import run_scenario
-from .run_result import RunResult, ScenarioResult, AuthResult
-from .timing import timed
+from .load_executor import run_load_test_async
+from .load_result import LoadTestResult
+from .metric_thresholds import evaluate_metric_thresholds
+from .user import UlfUserSource, StaticUserSource, UserSource
 from ..model import TestFile
 
 
@@ -33,105 +35,116 @@ def _build_runtime_context(t) -> tuple[str, dict[str, str]]:
     return base_url, ctx
 
 
-def _run_auth_if_present(client, t, ctx) -> Optional[AuthResult]:
+# ---------------------------------------------------------------------------
+# User source factory
+# ---------------------------------------------------------------------------
+
+
+def _build_user_source(
+    t,
+    ctx: dict[str, str],
+    userlist_path: Optional[Path],
+) -> Optional[UserSource]:
+    """
+    Inspect the test model and return the appropriate ``UserSource``.
+
+    * If auth is absent → ``None`` (no auth needed).
+    * If auth has a ``file`` field → ``UlfUserSource`` (per-user auth from .ulf).
+      The *userlist_path* is validated and provided by the CLI.
+    * Otherwise → ``StaticUserSource`` (shared token).
+    """
     if t.auth is None:
         return None
 
-    try:
-        _, duration = _run_auth_timed(client, t, ctx)
-        success = True
-        error = None
-    except Exception as e:
-        duration = 0.0
-        success = False
-        error = str(e)
+    if t.auth.file:
+        if not userlist_path:
+            raise RuntimeError(
+                "Test model requires a user list file (.ulf), but no path was provided."
+            )
+        return UlfUserSource(userlist_path, t.auth)
 
-    endpoint_str = "<missing-endpoint>"
-    if t.auth.endpoint is not None:
-        if getattr(t.auth.endpoint, "value", ""):
-            endpoint_str = t.auth.endpoint.value.strip().strip('"')
-        elif getattr(t.auth.endpoint, "ref", None) is not None:
-            endpoint_str = f"#{t.auth.endpoint.ref.name}"
-
-    return AuthResult(
-        endpoint=endpoint_str,
-        method=t.auth.method,
-        duration_seconds=duration,
-        success=success,
-        error=error,
-    )
+    return StaticUserSource(ctx)
 
 
-def _execute_auth(client, t, ctx):
-    token = run_auth_login(client, t.auth, ctx)
-
-    if "authToken" in ctx:
-        raise RuntimeError("Reserved name conflict: 'authToken' already defined.")
-
-    ctx["authToken"] = token
-    client.headers["Authorization"] = f"Bearer {token}"
-
-    return token
+# ---------------------------------------------------------------------------
+# Load parameters
+# ---------------------------------------------------------------------------
 
 
-@timed
-def _run_auth_timed(client, t, ctx):
-    return _execute_auth(client, t, ctx)
+def _resolve_load_params(t) -> tuple[int, float, float]:
+    """
+    Extract (num_users, ramp_up_seconds, duration_seconds) from the test
+    model.  If no load block is present, defaults to single-pass mode.
+    """
+    if t.load is not None and t.load.users > 0:
+        return (
+            t.load.users,
+            t.load.ramp_up.total_seconds(),
+            t.load.duration.total_seconds(),
+        )
+    return 1, 0.0, 0.0
 
 
-def _run_scenarios(
-    client: httpx.Client,
-    t,
-    ctx: dict[str, str],
-) -> list[ScenarioResult]:
-    results: list[ScenarioResult] = []
-
-    for sc in t.scenarios:
-        name = sc.name.strip().strip('"')
-        r = ScenarioResult(name=name)
-
-        try:
-            r.requests = run_scenario(client, sc, ctx)
-            r.success = True
-        except Exception as e:
-            r.success = False
-            r.error = str(e)
-
-        results.append(r)
-
-    return results
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 
 
-def _run_test_internal(model: TestFile, transport=None) -> RunResult:
+def run_test(
+    model: TestFile,
+    *,
+    transport=None,
+    control_stdin: bool = False,
+    userlist_path: Optional[Path] = None,
+) -> LoadTestResult:
+    """
+    Run the test described by *model*.
+
+    Args:
+        model: Parsed test model
+        transport: Optional HTTP transport (for testing)
+        control_stdin: Enable stdin control
+        userlist_path: Resolved absolute path to the .ulf user list file
+    """
     t = _get_test(model)
     base_url, ctx = _build_runtime_context(t)
+    num_users, ramp_up_seconds, duration_seconds = _resolve_load_params(t)
 
-    with httpx.Client(base_url=base_url, transport=transport) as client:
-        auth_result = _run_auth_if_present(client, t, ctx)
-        if auth_result and not auth_result.success:
-            return RunResult(
-                test_name=t.name.strip().strip('"'),
-                duration_seconds=0.0,
-                scenarios=[],
-                auth=auth_result,
-            )
+    # Build the appropriate user source (None when no auth block).
+    user_source = _build_user_source(t, ctx, userlist_path)
 
-        scenarios = _run_scenarios(client, t, ctx)
-
-    return RunResult(
-        test_name=t.name.strip().strip('"'),
-        duration_seconds=0.0,
-        scenarios=scenarios,
-        auth=auth_result,
+    # Run the load test (or single-pass functional test).
+    metrics = asyncio.run(
+        run_load_test_async(
+            test=t,
+            base_url=base_url,
+            ctx=ctx,
+            num_users=num_users,
+            ramp_up_seconds=ramp_up_seconds,
+            duration_seconds=duration_seconds,
+            transport=transport,
+            control_stdin=control_stdin,
+            user_source=user_source,
+        )
     )
 
+    summary = metrics.summary()
+    metric_threshold_checks = len(t.metrics.checks) if t.metrics is not None else 0
+    metric_threshold_failures = (
+        evaluate_metric_thresholds(t.metrics, summary)
+        if not metrics.interrupted
+        else []
+    )
 
-@timed
-def _run_test_timed(model: TestFile, transport=None):
-    return _run_test_internal(model, transport)
-
-
-def run_test(model: TestFile, *, transport=None) -> RunResult:
-    result, duration = _run_test_timed(model, transport)
-    result.duration_seconds = duration
-    return result
+    return LoadTestResult(
+        test_name=t.name.strip().strip('"'),
+        users=num_users,
+        ramp_up_seconds=ramp_up_seconds,
+        target_duration_seconds=duration_seconds,
+        summary=summary,
+        auth_results=list(metrics.auth_results),
+        interrupted=metrics.interrupted,
+        stop_reason=metrics.stop_reason,
+        metric_threshold_checks=metric_threshold_checks,
+        metric_threshold_failures=metric_threshold_failures,
+    )

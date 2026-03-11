@@ -10,11 +10,13 @@ Test:
         (variables=VariablesBlock)?
         scenarios*=Scenario
         (load=Load)?
+        (metrics=MetricsBlock)?
     '}'
 ;
 
 AuthLogin:
     'auth' 'login' '{'
+        (file?='file')?
         'endpoint' endpoint=ValueOrRef
         'method' method=HttpMethod
         'body' body=BodyBlock
@@ -65,7 +67,11 @@ ExpectStatus:
 ;
 
 ExpectJson:
-    'expect' 'json' path=STRING check=JsonCheck
+    'expect' 'json' path=JsonPath check=JsonCheck
+;
+
+JsonPath:
+    /\$[\.\[][A-Za-z0-9_\-\.\[\]\*\?\@\:\'\"]+/
 ;
 
 JsonCheck:
@@ -73,6 +79,15 @@ JsonCheck:
     | kind='notEmpty'
     | kind='equals' value=ValueOrRef
     | kind='hasSize' size=INT
+    | kind='contains' value=ValueOrRef
+    | kind='matches'  value=ValueOrRef
+    | kind='isEmpty'
+    | kind='isNull'
+    | kind='notNull'
+    | kind='isObject'
+    | kind='isString'
+    | kind='isNumber'
+    | kind='isBool'
 ;
 
 HttpMethod:
@@ -113,4 +128,31 @@ Duration:
     (hours=INT 'h')?
     (minutes=INT 'm')?
     (seconds=INT 's')?
+;
+
+MetricsBlock:
+    'metrics' '{'
+        checks*=MetricExpectation
+    '}'
+;
+
+MetricExpectation:
+      metric=LatencyMetric op=MetricOperator value=MetricNumber unit=LatencyUnit
+    | metric='errorRate' op=MetricOperator value=MetricNumber unit='%'
+;
+
+LatencyMetric:
+    'p50' | 'p95' | 'p99' | 'avg' | 'min' | 'max'
+;
+
+LatencyUnit:
+    'us' | 'ms' | 's'
+;
+
+MetricOperator:
+    '<=' | '<' | '>=' | '>'
+;
+
+MetricNumber:
+    /[0-9]+(\.[0-9]+)?/
 ;

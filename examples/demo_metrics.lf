@@ -1,0 +1,23 @@
+test "Load + Metrics Demo" {
+  environment {
+    baseUrl = env("BASE_URL")
+  }
+
+  target #baseUrl
+
+  scenario "fetch index" {
+    request GET "/"
+    expect status 200
+  }
+
+  load {
+    users 10
+    rampUp 3s
+    duration 10s
+  }
+
+  metrics {
+    p95 < 2s
+    errorRate < 1%
+  }
+}

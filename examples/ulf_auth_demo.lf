@@ -1,31 +1,34 @@
-test "Hello DSL" {
+test "ULF Multi-User Load Test" {
   environment {
+    authEndpoint = env("AUTH_ENDPOINT")
     baseUrl = env("BASE_URL")
-    token   = env("TOKEN")
   }
 
   target #baseUrl
 
   auth login {
-    endpoint "/auth/login"
+    file
+    endpoint #authEndpoint
     method POST
     body {
-      username = "admin"
-      password = "admin"
+      username = "${username}"
+      password = "${password}"
     }
     format "$.access_token"
   }
-
+   
   variables {
     q = "phone"
     q2 = "laptop"
+    expectedName = "iPhone 14"
   }
 
   scenario "search" {
     request GET "/catalog/search?q=${q}"
     expect status 200
-    expect json "$.results" isArray
-    expect json "$.results[0].name" equals "iPhone 14"
+    expect json $.results isArray
+    expect json $.results[0].name equals #expectedName
+    expect json $.results notEmpty
   }
 
   scenario "search again" {
@@ -35,7 +38,12 @@ test "Hello DSL" {
 
   load {
     users 10
-    rampUp 10s
-    duration 1m
+    rampUp 2s
+    duration 10s
+  }
+
+  metrics {
+    p95 < 500ms
+    errorRate < 5%
   }
 }

@@ -1,5 +1,4 @@
-test "Catalog search - steady load" {
-
+test "Catalog Search - Full Demo" {
   environment {
     baseUrl = env("BASE_URL")
     authEndpoint = env("AUTH_ENDPOINT")
@@ -21,22 +20,31 @@ test "Catalog search - steady load" {
 
   variables {
     q = "phone"
+    q2 = "laptop"
+    expectedName = "iPhone 14"
   }
 
   scenario "search" {
     request GET "/catalog/search?q=${q}"
     expect status 200
-    expect json "$.results" isArray // (could be notEmpty, isArray, hasSize, etc.)
+    expect json $.results isArray
+    expect json $.results[0].name equals #expectedName
+    expect json $.results notEmpty
+  }
+
+  scenario "search again" {
+    request GET "/catalog/search?q=${q2}"
+    expect status 200
   }
 
   load {
-    users 50
-    rampUp 30s
-    duration 5m
+    users 10
+    rampUp 5s
+    duration 30s
   }
 
   metrics {
-    p95 < 250ms
-    errorRate < 1%
+    p95 < 500ms
+    errorRate < 2%
   }
 }

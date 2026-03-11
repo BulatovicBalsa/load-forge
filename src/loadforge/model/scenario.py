@@ -10,11 +10,28 @@ class JsonCheckKind(Enum):
     notEmpty = "notEmpty"
     equals = "equals"
     hasSize = "hasSize"
+    isEmpty = "isEmpty"
+    isNull = "isNull"
+    notNull = "notNull"
+    isObject = "isObject"
+    isString = "isString"
+    isNumber = "isNumber"
+    isBool = "isBool"
+    contains = "contains"
+    matches = "matches"
+
+
+class HttpMethod(Enum):
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
 
 
 @dataclass
 class Request(TxNode):
-    method: str = ""  # GET/POST...
+    method: HttpMethod = HttpMethod.GET
     path: str = ""    # STRING literal
 
 
