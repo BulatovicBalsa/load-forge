@@ -13,6 +13,7 @@ from .context import (
 from .load_executor import run_load_test_async
 from .load_result import LoadTestResult
 from .metric_thresholds import evaluate_metric_thresholds
+from .preflight import preflight_check
 from .user import UlfUserSource, StaticUserSource, UserSource
 from ..model import TestFile
 
@@ -86,6 +87,22 @@ def _resolve_load_params(t) -> tuple[int, float, float]:
 
 
 # ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+
+
+def _run_preflight(base_url: str, transport=None) -> None:
+    """
+    Execute the preflight connectivity check synchronously.
+    """
+    result = asyncio.run(
+        preflight_check(base_url, transport=transport)
+    )
+    if not result.success:
+        raise RuntimeError(result.display)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -108,6 +125,10 @@ def run_test(
     """
     t = _get_test(model)
     base_url, ctx = _build_runtime_context(t)
+
+    # Preflight: abort early if the server is not reachable.
+    _run_preflight(base_url, transport=transport)
+
     num_users, ramp_up_seconds, duration_seconds = _resolve_load_params(t)
 
     # Build the appropriate user source (None when no auth block).
