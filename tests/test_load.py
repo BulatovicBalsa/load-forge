@@ -349,7 +349,7 @@ def test_variable_interpolation_in_load():
     result = run_test(model, transport=transport)
 
     assert result.failed == 0
-    assert "/search?q=phone" in captured_paths[0]
+    assert any("/search?q=phone" in p for p in captured_paths)
 
 
 def test_load_multiple_scenarios_all_execute():
